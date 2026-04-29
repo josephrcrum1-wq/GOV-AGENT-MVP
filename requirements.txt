@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+streamlit
+sqlalchemy
+pydantic
+requests
+python-dotenv
+beautifulsoup4
+openai
+pymupdf
