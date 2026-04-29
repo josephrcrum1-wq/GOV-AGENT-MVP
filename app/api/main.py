@@ -310,6 +310,7 @@ def analyze_decision(payload: DecisionAnalysisRequest, db: Session = Depends(get
 
     try:
         return run_decision_agent(
+            db=db,
             profile=profile,
             opportunity=payload.opportunity,
             awards=payload.awards or [],
@@ -336,6 +337,7 @@ def proposal_plan(payload: dict, db: Session = Depends(get_db)):
     ) or {}
 
     return generate_proposal_plan(
+        db=db,
         profile=profile,
         opportunity=payload["opportunity"],
         awards=payload.get("awards", []),
