@@ -1,116 +1,66 @@
-import json
-from openai import OpenAI
-from app.core.config import settings
-
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+from app.services.llm_service import call_llm
+from app.services.document_service import get_combined_document_text
 
 
-def generate_proposal_plan(
-    profile,
-    opportunity: dict,
-    awards: list[dict] | None = None,
-    enrichment: dict | None = None,
-) -> dict:
-    awards = awards or []
-    enrichment = enrichment or {}
+def generate_proposal_plan(db, profile, opportunity, awards=None, enrichment=None):
+    opportunity_text = f"""
+Title: {opportunity.get('title')}
+Agency: {opportunity.get('agency')}
+Summary: {opportunity.get('description')}
+"""
+
+    profile_text = f"""
+Capabilities: {profile.capability_summary}
+Keywords: {profile.keywords}
+Past Performance: {profile.past_performance}
+"""
 
     awards_text = ""
-    for award in awards[:5]:
-        awards_text += f"""
-Recipient: {award.get("recipient_name")}
-Amount: {award.get("award_amount")}
-Agency: {award.get("awarding_agency")}
-Description: {award.get("description")}
----
+    if awards:
+        awards_text = "\n".join([str(a) for a in awards])
+
+    enrichment_text = ""
+    if enrichment:
+        enrichment_text = f"""
+USER PROVIDED DETAILS:
+{enrichment}
 """
 
-    enrichment_text = f"""
-Known Requirements: {enrichment.get("known_requirements", "")}
-Compliance Requirements: {enrichment.get("compliance_requirements", "")}
-Place of Performance: {enrichment.get("place_of_performance", "")}
-Clearance Requirements: {enrichment.get("clearance_requirements", "")}
-Deliverables: {enrichment.get("deliverables", "")}
-Period of Performance: {enrichment.get("period_of_performance", "")}
-Incumbent / Competitors: {enrichment.get("incumbent_or_competitors", "")}
-Submission Deadline: {enrichment.get("submission_deadline", "")}
-Customer Priorities: {enrichment.get("customer_priorities", "")}
-Questions / Unknowns: {enrichment.get("questions_or_unknowns", "")}
-Additional Notes: {enrichment.get("additional_notes", "")}
-"""
+    # 🔥 NEW: Document grounding
+    document_text = get_combined_document_text(db, opportunity["notice_id"])
 
     prompt = f"""
-You are a federal proposal strategist.
-
-Create a proposal plan for this opportunity.
-
-IMPORTANT RULES:
-- Do NOT invent requirements.
-- If the opportunity is under-specified, clearly identify missing details.
-- Use human-provided opportunity context as primary evidence.
-- The output should help a proposal team prepare, not pretend the proposal is complete.
-
-COMPANY:
-{profile.capability_summary}
-
-PAST PERFORMANCE:
-{profile.past_performance_summary}
-
-KEYWORDS:
-{profile.keywords}
+You are an expert proposal strategist.
 
 OPPORTUNITY:
-Title: {opportunity.get("title")}
-Agency: {opportunity.get("agency")}
-Description: {opportunity.get("description")}
+{opportunity_text}
 
-HUMAN-PROVIDED OPPORTUNITY CONTEXT:
-{enrichment_text}
+EXTRACTED SOLICITATION DOCUMENT TEXT:
+{document_text}
 
-SIMILAR HISTORICAL AWARDS:
+COMPANY PROFILE:
+{profile_text}
+
+SIMILAR AWARDS:
 {awards_text}
 
-Return ONLY valid JSON with this exact structure:
+{enrichment_text}
 
-{{
-  "summary": "short summary",
-  "key_requirements": ["requirement 1", "requirement 2"],
-  "win_themes": ["theme 1", "theme 2"],
-  "differentiators": ["differentiator 1", "differentiator 2"],
-  "risks": ["risk 1", "risk 2"],
-  "teaming_strategy": "recommended teaming strategy",
-  "proposal_outline": ["Executive Summary", "Technical Approach", "Management Plan", "Past Performance", "Staffing Plan"],
-  "missing_information": ["missing item 1", "missing item 2"]
-}}
+INSTRUCTIONS:
+- Base proposal strategy on actual document requirements
+- If requirements are missing, explicitly state them
+- DO NOT invent requirements
+- Use realistic government proposal language
+
+OUTPUT FORMAT:
+Return JSON with:
+- summary
+- key_requirements (list)
+- win_themes (list)
+- differentiators (list)
+- risks (list)
+- teaming_strategy
+- proposal_outline (list)
 """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": "Return only valid JSON. Do not include markdown, code fences, or commentary.",
-            },
-            {
-                "role": "user",
-                "content": prompt,
-            },
-        ],
-        temperature=0.2,
-        response_format={"type": "json_object"},
-    )
-
-    content = response.choices[0].message.content
-
-    try:
-        return json.loads(content)
-    except Exception:
-        return {
-            "summary": "Proposal plan could not be parsed.",
-            "key_requirements": [],
-            "win_themes": [],
-            "differentiators": [],
-            "risks": [content[:500]],
-            "teaming_strategy": "",
-            "proposal_outline": [],
-            "missing_information": ["Valid structured model response"],
-        }
+    return call_llm(prompt)

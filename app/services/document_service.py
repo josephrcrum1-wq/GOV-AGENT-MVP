@@ -113,7 +113,9 @@ def get_documents_for_notice(db: Session, notice_id: str) -> list[dict]:
     ]
 
 
-def get_combined_document_text(db: Session, notice_id: str, max_chars: int = 12000) -> str:
+def get_combined_document_text(db, notice_id: str, max_chars: int = 12000) -> str:
+    from app.db import crud
+
     docs = crud.get_documents_for_notice(db, notice_id)
 
     text = ""
