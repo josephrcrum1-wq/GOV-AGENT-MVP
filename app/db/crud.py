@@ -291,3 +291,44 @@ def get_opportunity_enrichment(db: Session, profile_id: int, notice_id: str):
         )
         .first()
     )
+
+def upsert_opportunity_document(db: Session, document_data: dict):
+    existing = (
+        db.query(models.OpportunityDocument)
+        .filter(
+            models.OpportunityDocument.notice_id == document_data["notice_id"],
+            models.OpportunityDocument.document_url == document_data["document_url"],
+        )
+        .first()
+    )
+
+    if existing:
+        for key, value in document_data.items():
+            setattr(existing, key, value)
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    document = models.OpportunityDocument(**document_data)
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+    return document
+
+
+def get_documents_for_notice(db: Session, notice_id: str):
+    return (
+        db.query(models.OpportunityDocument)
+        .filter(models.OpportunityDocument.notice_id == notice_id)
+        .order_by(models.OpportunityDocument.id.desc())
+        .all()
+    )
+
+
+def get_pending_documents(db: Session, limit: int = 25):
+    return (
+        db.query(models.OpportunityDocument)
+        .filter(models.OpportunityDocument.extraction_status == "pending")
+        .limit(limit)
+        .all()
+    )
