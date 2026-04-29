@@ -59,6 +59,8 @@ IMPORTANT RULES:
 - Use human-provided opportunity context as primary evidence.
 - If the opportunity is under-specified, clearly identify missing details.
 - The output should help a proposal team prepare, not pretend the proposal is complete.
+- Every win theme, risk, and proposed approach should be supported by evidence where possible.
+- If something is inferred, place it under assumptions, not evidence.
 
 COMPANY:
 {profile.capability_summary}
@@ -94,7 +96,15 @@ Return ONLY valid JSON with this exact structure:
   "risks": ["risk 1", "risk 2"],
   "teaming_strategy": "recommended teaming strategy",
   "proposal_outline": ["Executive Summary", "Technical Approach", "Management Plan", "Past Performance", "Staffing Plan"],
-  "missing_information": ["missing item 1", "missing item 2"]
+  "missing_information": ["missing item 1", "missing item 2"],
+  "evidence": [
+    {{
+      "source": "Document | SAM Summary | Human Context | Company Profile | Historical Awards",
+      "claim": "What this evidence supports.",
+      "excerpt": "Short supporting excerpt or paraphrase."
+    }}
+  ],
+  "assumptions": ["assumption 1", "assumption 2"]
 }}
 """
 
@@ -113,7 +123,12 @@ Return ONLY valid JSON with this exact structure:
         )
 
         content = response.choices[0].message.content
-        return json.loads(content)
+        result = json.loads(content)
+
+        result.setdefault("evidence", [])
+        result.setdefault("assumptions", [])
+
+        return result
 
     except Exception as exc:
         return {
@@ -125,4 +140,6 @@ Return ONLY valid JSON with this exact structure:
             "teaming_strategy": "",
             "proposal_outline": [],
             "missing_information": ["Valid model response"],
+            "evidence": [],
+            "assumptions": [],
         }

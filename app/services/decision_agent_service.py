@@ -60,6 +60,8 @@ IMPORTANT RULES:
 - If details are missing, say they are missing.
 - Lower confidence when document text or requirements are thin.
 - Confidence must be an integer from 0 to 100.
+- Every recommendation should be supported by evidence where possible.
+- If something is inferred, place it under assumptions, not evidence.
 
 COMPANY PROFILE:
 Company: {profile.company_name}
@@ -98,7 +100,15 @@ Return ONLY valid JSON with this exact structure:
   "risks": ["risk 1", "risk 2"],
   "suggested_approach": "Recommend positioning, teaming, or next steps.",
   "confidence": 0,
-  "missing_information": ["missing item 1", "missing item 2"]
+  "missing_information": ["missing item 1", "missing item 2"],
+  "evidence": [
+    {{
+      "source": "Document | SAM Summary | Human Context | Company Profile | Historical Awards",
+      "claim": "What this evidence supports.",
+      "excerpt": "Short supporting excerpt or paraphrase."
+    }}
+  ],
+  "assumptions": ["assumption 1", "assumption 2"]
 }}
 """
 
@@ -119,6 +129,9 @@ Return ONLY valid JSON with this exact structure:
         result["confidence"] = int(result.get("confidence", 0))
         result["confidence"] = max(0, min(100, result["confidence"]))
 
+        result.setdefault("evidence", [])
+        result.setdefault("assumptions", [])
+
         return result
 
     except Exception as exc:
@@ -131,4 +144,6 @@ Return ONLY valid JSON with this exact structure:
             "suggested_approach": "",
             "confidence": 0,
             "missing_information": ["Valid model response"],
+            "evidence": [],
+            "assumptions": [],
         }

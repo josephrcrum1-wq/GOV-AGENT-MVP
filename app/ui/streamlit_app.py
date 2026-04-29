@@ -800,6 +800,22 @@ def render_opportunity_tools(opp, prefix="main"):
         for item in decision.get("missing_information", []):
             st.write(f"- {item}")
 
+    if decision.get("evidence"):
+        st.write("### Evidence")
+        for item in decision.get("evidence", []):
+            source = item.get("source", "Unknown")
+            claim = item.get("claim", "")
+            excerpt = item.get("excerpt", "")
+            st.write(f"**Source:** {source}")
+            st.write(f"- **Supports:** {claim}")
+            if excerpt:
+                st.write(f"- **Evidence:** {excerpt}")
+
+    if decision.get("assumptions"):
+        st.write("### Assumptions")
+        for item in decision.get("assumptions", []):
+            st.write(f"- {item}")
+
     # --------------------------------------------------
     # Proposal support
     # --------------------------------------------------
@@ -870,7 +886,21 @@ def render_opportunity_tools(opp, prefix="main"):
                 for item in proposal_plan.get("missing_information", []):
                     st.write(f"- {item}")
 
+    if proposal_plan.get("evidence"):
+        st.write("### Evidence")
+        for item in proposal_plan.get("evidence", []):
+            source = item.get("source", "Unknown")
+            claim = item.get("claim", "")
+            excerpt = item.get("excerpt", "")
+            st.write(f"**Source:** {source}")
+            st.write(f"- **Supports:** {claim}")
+            if excerpt:
+                st.write(f"- **Evidence:** {excerpt}")
 
+    if proposal_plan.get("assumptions"):
+        st.write("### Assumptions")
+        for item in proposal_plan.get("assumptions", []):
+            st.write(f"- {item}")
 # --------------------------------------------------
 # Ranked results section
 # --------------------------------------------------
