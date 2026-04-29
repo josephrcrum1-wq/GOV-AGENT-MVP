@@ -774,9 +774,9 @@ def render_opportunity_tools(opp, prefix="main"):
         except Exception as exc:
             st.error(f"Failed to run decision analysis: {exc}")
 
-    decision = st.session_state.get(decision_state_key)
+    decision = st.session_state.get(decision_state_key) or {}
 
-    if decision:
+    if isinstance(decision, dict) and decision:
         st.write("### Opportunity Summary")
         st.write(decision.get("opportunity_summary", ""))
 
@@ -849,9 +849,9 @@ def render_opportunity_tools(opp, prefix="main"):
         except Exception as exc:
             st.error(f"Failed to generate proposal plan: {exc}")
 
-    proposal_plan = st.session_state.get(proposal_state_key)
+    proposal_plan = st.session_state.get(proposal_state_key) or {}
 
-    if proposal_plan:
+    if isinstance(proposal_plan, dict) and proposal_plan:
         if proposal_plan.get("error"):
             st.error(proposal_plan.get("error"))
         else:
