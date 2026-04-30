@@ -688,6 +688,16 @@ def render_opportunity_tools(opp, prefix="main"):
 
         docs_key = f"{prefix}_documents_{notice_id}"
 
+        if docs_key not in st.session_state:
+            try:
+                res = requests.get(f"{API}/documents/{notice_id}", timeout=30)
+                if res.ok:
+                    st.session_state[docs_key] = res.json()
+                else:
+                    st.session_state[docs_key] = []
+            except Exception:
+                st.session_state[docs_key] = []
+
         col_load_docs, col_process_docs, col_process_reviewed = st.columns(3)
 
         with col_load_docs:
