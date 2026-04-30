@@ -348,3 +348,58 @@ def get_pending_documents_for_notice_ids(db: Session, notice_ids: list[str], lim
         .limit(limit)
         .all()
     )
+
+# --------------------------------------------------
+# Opportunity analysis persistence
+# --------------------------------------------------
+def upsert_opportunity_analysis(db, profile_id: int, notice_id: str, analysis_type: str, payload: dict):
+    existing = (
+        db.query(models.OpportunityAnalysis)
+        .filter(
+            models.OpportunityAnalysis.profile_id == profile_id,
+            models.OpportunityAnalysis.notice_id == notice_id,
+            models.OpportunityAnalysis.analysis_type == analysis_type,
+        )
+        .first()
+    )
+
+    if existing:
+        existing.payload = payload
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    row = models.OpportunityAnalysis(
+        profile_id=profile_id,
+        notice_id=notice_id,
+        analysis_type=analysis_type,
+        payload=payload,
+    )
+
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def get_opportunity_analyses(db, profile_id: int, notice_id: str):
+    return (
+        db.query(models.OpportunityAnalysis)
+        .filter(
+            models.OpportunityAnalysis.profile_id == profile_id,
+            models.OpportunityAnalysis.notice_id == notice_id,
+        )
+        .all()
+    )
+
+
+def get_opportunity_analysis(db, profile_id: int, notice_id: str, analysis_type: str):
+    return (
+        db.query(models.OpportunityAnalysis)
+        .filter(
+            models.OpportunityAnalysis.profile_id == profile_id,
+            models.OpportunityAnalysis.notice_id == notice_id,
+            models.OpportunityAnalysis.analysis_type == analysis_type,
+        )
+        .first()
+    )

@@ -1,6 +1,8 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, UniqueConstraint
 from sqlalchemy.sql import func
 from app.db.session import Base
+from sqlalchemy import Column, Integer, String, DateTime, JSON, UniqueConstraint
+from sqlalchemy.sql import func
 
 
 class CompanyProfile(Base):
@@ -87,3 +89,19 @@ class OpportunityDocument(Base):
     extraction_status = Column(String, default="pending")
     error_message = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class OpportunityAnalysis(Base):
+    __tablename__ = "opportunity_analyses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    profile_id = Column(Integer, index=True, nullable=False)
+    notice_id = Column(String, index=True, nullable=False)
+    analysis_type = Column(String, index=True, nullable=False)
+    payload = Column(JSON, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("profile_id", "notice_id", "analysis_type", name="uq_profile_notice_analysis"),
+    )

@@ -1,12 +1,12 @@
-import streamlit as st
-import requests
-
 import os
+import requests
+import streamlit as st
 
 API = os.getenv("API_URL", "http://127.0.0.1:8000")
 
 st.set_page_config(page_title="Gov Agent MVP", layout="wide")
 st.title("Gov Agent MVP - Phase 1")
+
 
 # --------------------------------------------------
 # Session state defaults
@@ -150,6 +150,59 @@ def save_enrichment(payload):
         return None
 
 
+def save_analysis_output(profile_id, notice_id, analysis_type, payload):
+    if not profile_id or not notice_id or not analysis_type or not payload:
+        return
+
+    try:
+        requests.post(
+            f"{API}/analysis/save",
+            json={
+                "profile_id": profile_id,
+                "notice_id": notice_id,
+                "analysis_type": analysis_type,
+                "payload": payload,
+            },
+            timeout=30,
+        )
+    except Exception:
+        pass
+
+
+def load_saved_analysis_into_session(profile_id, notice_id, prefix):
+    if not profile_id or not notice_id:
+        return {}
+
+    try:
+        res = requests.get(f"{API}/analysis/{profile_id}/{notice_id}", timeout=30)
+
+        if not res.ok:
+            st.error(res.text)
+            return {}
+
+        saved = res.json() or {}
+
+        key_map = {
+            "decision_analysis": f"{prefix}_decision_analysis_{notice_id}",
+            "proposal_plan": f"{prefix}_proposal_plan_{notice_id}",
+            "proposal_draft": f"{prefix}_proposal_draft_{notice_id}",
+            "advisor_review": f"{prefix}_proposal_review_{notice_id}",
+            "requirements": f"{prefix}_requirements_{notice_id}",
+            "compliance_matrix": f"{prefix}_compliance_matrix_{notice_id}",
+            "final_review": f"{prefix}_final_review_{notice_id}",
+        }
+
+        for analysis_type, state_key in key_map.items():
+            if analysis_type in saved:
+                st.session_state[state_key] = saved[analysis_type].get("payload", {})
+
+        return saved
+
+    except Exception as exc:
+        st.error(f"Failed to load saved work: {exc}")
+        return {}
+
+
 def render_enrichment_form(notice_id):
     profile_id = st.session_state.get("profile_id")
     enrichment_state_key = f"enrichment_{profile_id}_{notice_id}"
@@ -159,7 +212,6 @@ def render_enrichment_form(notice_id):
 
     enrichment = st.session_state.get(enrichment_state_key, {}) or {}
 
-    st.markdown("---")
     st.subheader("Human Opportunity Enrichment")
     st.caption(
         "Add known contract details here before running AI analysis or proposal support. "
@@ -167,61 +219,17 @@ def render_enrichment_form(notice_id):
     )
 
     with st.form(f"enrichment_form_{notice_id}"):
-        known_requirements = st.text_area(
-            "Known Requirements",
-            value=enrichment.get("known_requirements", ""),
-            key=f"known_requirements_{notice_id}",
-        )
-        compliance_requirements = st.text_area(
-            "Compliance Requirements",
-            value=enrichment.get("compliance_requirements", ""),
-            key=f"compliance_requirements_{notice_id}",
-        )
-        place_of_performance = st.text_input(
-            "Place of Performance",
-            value=enrichment.get("place_of_performance", ""),
-            key=f"place_of_performance_{notice_id}",
-        )
-        clearance_requirements = st.text_input(
-            "Clearance Requirements",
-            value=enrichment.get("clearance_requirements", ""),
-            key=f"clearance_requirements_{notice_id}",
-        )
-        deliverables = st.text_area(
-            "Deliverables",
-            value=enrichment.get("deliverables", ""),
-            key=f"deliverables_{notice_id}",
-        )
-        period_of_performance = st.text_input(
-            "Period of Performance",
-            value=enrichment.get("period_of_performance", ""),
-            key=f"period_of_performance_{notice_id}",
-        )
-        incumbent_or_competitors = st.text_area(
-            "Incumbent / Known Competitors",
-            value=enrichment.get("incumbent_or_competitors", ""),
-            key=f"incumbent_or_competitors_{notice_id}",
-        )
-        submission_deadline = st.text_input(
-            "Submission Deadline",
-            value=enrichment.get("submission_deadline", ""),
-            key=f"submission_deadline_{notice_id}",
-        )
-        customer_priorities = st.text_area(
-            "Customer Priorities",
-            value=enrichment.get("customer_priorities", ""),
-            key=f"customer_priorities_{notice_id}",
-        )
-        questions_or_unknowns = st.text_area(
-            "Questions / Unknowns",
-            value=enrichment.get("questions_or_unknowns", ""),
-            key=f"questions_or_unknowns_{notice_id}",
-        )
-        additional_notes = st.text_area(
-            "Additional Notes",
-            value=enrichment.get("additional_notes", ""),
-            key=f"additional_notes_{notice_id}",
-        )
+        known_requirements = st.text_area("Known Requirements", value=enrichment.get("known_requirements", ""), key=f"known_requirements_{notice_id}")
+        compliance_requirements = st.text_area("Compliance Requirements", value=enrichment.get("compliance_requirements", ""), key=f"compliance_requirements_{notice_id}")
+        place_of_performance = st.text_input("Place of Performance", value=enrichment.get("place_of_performance", ""), key=f"place_of_performance_{notice_id}")
+        clearance_requirements = st.text_input("Clearance Requirements", value=enrichment.get("clearance_requirements", ""), key=f"clearance_requirements_{notice_id}")
+        deliverables = st.text_area("Deliverables", value=enrichment.get("deliverables", ""), key=f"deliverables_{notice_id}")
+        period_of_performance = st.text_input("Period of Performance", value=enrichment.get("period_of_performance", ""), key=f"period_of_performance_{notice_id}")
+        incumbent_or_competitors = st.text_area("Incumbent / Known Competitors", value=enrichment.get("incumbent_or_competitors", ""), key=f"incumbent_or_competitors_{notice_id}")
+        submission_deadline = st.text_input("Submission Deadline", value=enrichment.get("submission_deadline", ""), key=f"submission_deadline_{notice_id}")
+        customer_priorities = st.text_area("Customer Priorities", value=enrichment.get("customer_priorities", ""), key=f"customer_priorities_{notice_id}")
+        questions_or_unknowns = st.text_area("Questions / Unknowns", value=enrichment.get("questions_or_unknowns", ""), key=f"questions_or_unknowns_{notice_id}")
+        additional_notes = st.text_area("Additional Notes", value=enrichment.get("additional_notes", ""), key=f"additional_notes_{notice_id}")
 
         submitted = st.form_submit_button("Save Opportunity Context")
 
@@ -263,18 +271,9 @@ with st.form("profile_form"):
     set_aside_status = st.text_input("Set-Aside Status", value=st.session_state["set_aside_status"])
     contract_min = st.text_input("Minimum Contract Value", value=st.session_state["contract_min"])
     contract_max = st.text_input("Maximum Contract Value", value=st.session_state["contract_max"])
-    agencies_of_interest = st.text_input(
-        "Agencies of Interest (comma separated)",
-        value=st.session_state["agencies_of_interest"],
-    )
-    geographic_preferences = st.text_input(
-        "Geographic Preferences",
-        value=st.session_state["geographic_preferences"],
-    )
-    past_performance_summary = st.text_area(
-        "Past Performance Summary",
-        value=st.session_state["past_performance_summary"],
-    )
+    agencies_of_interest = st.text_input("Agencies of Interest (comma separated)", value=st.session_state["agencies_of_interest"])
+    geographic_preferences = st.text_input("Geographic Preferences", value=st.session_state["geographic_preferences"])
+    past_performance_summary = st.text_area("Past Performance Summary", value=st.session_state["past_performance_summary"])
 
     col_save, col_update = st.columns(2)
 
@@ -462,10 +461,7 @@ with col_sync:
             st.error("Load or save a profile first.")
         else:
             try:
-                res = requests.post(
-                    f"{API}/opportunities/sync/{profile_id}",
-                    timeout=120,
-                )
+                res = requests.post(f"{API}/opportunities/sync/{profile_id}", timeout=120)
 
                 if res.ok:
                     data = res.json()
@@ -478,7 +474,6 @@ with col_sync:
             except Exception as exc:
                 st.error(f"Failed to sync SAM: {exc}")
 
-
 with col_local:
     if st.button("Search Local Opportunities"):
         profile_id = st.session_state.get("profile_id")
@@ -487,11 +482,7 @@ with col_local:
             st.error("Load or save a profile first.")
         else:
             try:
-                res = requests.post(
-                    f"{API}/opportunities/local-search",
-                    json={"profile_id": profile_id},
-                    timeout=120,
-                )
+                res = requests.post(f"{API}/opportunities/local-search", json={"profile_id": profile_id}, timeout=120)
 
                 if res.ok:
                     st.session_state["opportunities"] = res.json()
@@ -503,7 +494,6 @@ with col_local:
             except Exception as exc:
                 st.error(f"Failed to search local opportunities: {exc}")
 
-
 with col_live:
     if st.button("Find Matching Opportunities (Live SAM)"):
         profile_id = st.session_state.get("profile_id")
@@ -512,11 +502,7 @@ with col_live:
             st.error("Load or save a profile first.")
         else:
             try:
-                res = requests.post(
-                    f"{API}/opportunities/search",
-                    json={"profile_id": profile_id},
-                    timeout=120,
-                )
+                res = requests.post(f"{API}/opportunities/search", json={"profile_id": profile_id}, timeout=120)
 
                 if res.ok:
                     st.session_state["opportunities"] = res.json()
@@ -529,7 +515,6 @@ with col_live:
 
             except Exception as exc:
                 st.error(f"Failed to search live opportunities: {exc}")
-
 
 with col_demo:
     if st.button("Load Demo Results"):
@@ -559,12 +544,13 @@ st.caption(f"Loaded opportunities in session: {len(results)}")
 
 
 # --------------------------------------------------
-# Shared renderer for full opportunity tools
+# Opportunity workspace renderer
 # --------------------------------------------------
 def render_opportunity_tools(opp, prefix="main"):
     notice_id = opp.get("notice_id", "UNKNOWN")
     stage = opp.get("stage", "Unknown")
     existing_review = get_review_map().get(notice_id)
+    profile_id = st.session_state.get("profile_id")
 
     st.write(f"**Notice ID:** {notice_id}")
     st.write(f"**Agency:** {opp.get('agency', '')}")
@@ -593,148 +579,244 @@ def render_opportunity_tools(opp, prefix="main"):
         for flag in opp["flags"]:
             st.write(f"- {flag}")
 
-    # --------------------------------------------------
-    # Document Intelligence Dashboard
-    # --------------------------------------------------
     st.markdown("---")
-    st.subheader("Document Intelligence")
-    st.caption("Shows whether solicitation documents were captured, extracted, and available for AI analysis.")
+    st.subheader("Saved Work")
 
-    docs_key = f"{prefix}_documents_{notice_id}"
+    col_load_saved, col_saved_status = st.columns([1, 3])
 
-    col_load_docs, col_process_docs, col_process_reviewed = st.columns(3)
+    with col_load_saved:
+        if st.button("Load Saved Work", key=f"{prefix}_load_saved_work_{notice_id}"):
+            saved = load_saved_analysis_into_session(profile_id, notice_id, prefix)
+            if saved:
+                st.success("Saved work loaded.")
+            else:
+                st.info("No saved work found yet.")
 
-    with col_load_docs:
-        if st.button("Load Documents", key=f"{prefix}_load_docs_{notice_id}"):
-            try:
-                res = requests.get(f"{API}/documents/{notice_id}", timeout=30)
+    with col_saved_status:
+        st.caption("Saved outputs are stored by profile, notice ID, and analysis type. Re-running an analysis overwrites the saved version.")
 
-                if res.ok:
-                    st.session_state[docs_key] = res.json()
-                    st.success("Documents loaded.")
-                else:
-                    st.error(res.text)
-
-            except Exception as exc:
-                st.error(f"Failed to load documents: {exc}")
-    with col_process_reviewed:
-        if st.button("Process Reviewed Docs", key=f"{prefix}_process_reviewed_docs_{notice_id}"):
-            try:
-                profile_id = st.session_state.get("profile_id")
-
-                res = requests.post(
-                    f"{API}/documents/process-reviewed/{profile_id}?limit=10",
-                    timeout=120,
-                )
-
-                if res.ok:
-                    st.success(f"Reviewed document processing result: {res.json()}")
-                else:
-                    st.error(res.text)
-
-            except Exception as exc:
-                st.error(f"Failed to process reviewed documents: {exc}")
-
-    with col_process_docs:
-        if st.button("Process Pending Documents", key=f"{prefix}_process_docs_{notice_id}"):
-            try:
-                res = requests.post(f"{API}/documents/process?limit=10", timeout=120)
-
-                if res.ok:
-                    st.success(f"Processing result: {res.json()}")
-                else:
-                    st.error(res.text)
-
-            except Exception as exc:
-                st.error(f"Failed to process documents: {exc}")
-
-    documents = st.session_state.get(docs_key, [])
-
-    if documents:
-        complete_docs = [d for d in documents if d.get("extraction_status") == "complete"]
-        failed_docs = [d for d in documents if d.get("extraction_status") == "failed"]
-        total_text = sum(d.get("text_length", 0) for d in documents)
-
-        dcol1, dcol2, dcol3 = st.columns(3)
-
-        with dcol1:
-            st.metric("Documents Found", len(documents))
-
-        with dcol2:
-            st.metric("Extracted", len(complete_docs))
-
-        with dcol3:
-            st.metric("Total Text Chars", total_text)
-
-        for doc in documents:
-            st.markdown("---")
-            st.write(f"**Name:** {doc.get('document_name', '')}")
-            st.write(f"**Status:** {doc.get('extraction_status', '')}")
-            st.write(f"**Text Length:** {doc.get('text_length', 0)}")
-            url = doc.get("document_url", "")
-            if url:
-                st.markdown(f"[Open Source Link]({url})")
-
-            if doc.get("error_message"):
-                st.error(doc.get("error_message"))
-
-            if doc.get("text_preview"):
-                with st.expander("Preview Extracted Text"):
-                    st.write(doc.get("text_preview"))
-    else:
-        st.warning("No documents loaded for this opportunity. AI analysis may rely only on SAM metadata and human enrichment.")
-
-    st.markdown("---")
-    st.subheader("Manual Document Upload")
-    st.caption("Upload RFP, SOW, PWS, amendment, or contracting office documents received outside SAM.gov. Supported: PDF, DOCX, TXT.")
-
-    uploaded_file = st.file_uploader(
-        "Upload solicitation document",
-        type=["pdf", "docx", "txt"],
-        key=f"{prefix}_manual_upload_{notice_id}",
+    overview_tab, docs_tab, req_tab, decision_tab, proposal_tab, compliance_tab, advisor_tab, export_tab = st.tabs(
+        [
+            "Overview",
+            "Documents",
+            "Requirements",
+            "Decision",
+            "Proposal",
+            "Compliance",
+            "Advisor Review",
+            "Export",
+        ]
     )
 
-    if uploaded_file:
-        if st.button("Upload and Extract Document", key=f"{prefix}_submit_manual_upload_{notice_id}"):
-            try:
-                files = {
-                    "file": (
-                        uploaded_file.name,
-                        uploaded_file.getvalue(),
-                        uploaded_file.type or "application/octet-stream",
-                    )
-                }
+    # --------------------------------------------------
+    # Overview tab
+    # --------------------------------------------------
+    with overview_tab:
+        render_enrichment_form(notice_id)
 
+        st.markdown("---")
+        st.subheader("Review Decision")
+
+        col_good, col_maybe, col_bad = st.columns(3)
+
+        with col_good:
+            if st.button("Good Fit", key=f"{prefix}_good_{notice_id}"):
                 res = requests.post(
-                    f"{API}/documents/upload?notice_id={notice_id}",
-                    files=files,
-                    timeout=120,
+                    f"{API}/reviews",
+                    json={
+                        "profile_id": st.session_state["profile_id"],
+                        "notice_id": notice_id,
+                        "disposition": "Good Fit",
+                        "reviewer_notes": "",
+                    },
+                    timeout=30,
                 )
 
                 if res.ok:
-                    st.success(f"Upload result: {res.json()}")
-
-                    docs_res = requests.get(f"{API}/documents/{notice_id}", timeout=30)
-                    if docs_res.ok:
-                        st.session_state[docs_key] = docs_res.json()
+                    st.success("Saved Good Fit")
+                    fetch_saved_reviews()
+                    st.rerun()
                 else:
                     st.error(res.text)
 
-            except Exception as exc:
-                st.error(f"Manual upload failed: {exc}")
+        with col_maybe:
+            if st.button("Maybe", key=f"{prefix}_maybe_{notice_id}"):
+                res = requests.post(
+                    f"{API}/reviews",
+                    json={
+                        "profile_id": st.session_state["profile_id"],
+                        "notice_id": notice_id,
+                        "disposition": "Maybe",
+                        "reviewer_notes": "",
+                    },
+                    timeout=30,
+                )
+
+                if res.ok:
+                    st.success("Saved Maybe")
+                    fetch_saved_reviews()
+                    st.rerun()
+                else:
+                    st.error(res.text)
+
+        with col_bad:
+            if st.button("Bad Fit", key=f"{prefix}_bad_{notice_id}"):
+                res = requests.post(
+                    f"{API}/reviews",
+                    json={
+                        "profile_id": st.session_state["profile_id"],
+                        "notice_id": notice_id,
+                        "disposition": "Bad Fit",
+                        "reviewer_notes": "",
+                    },
+                    timeout=30,
+                )
+
+                if res.ok:
+                    st.success("Saved Bad Fit")
+                    fetch_saved_reviews()
+                    st.rerun()
+                else:
+                    st.error(res.text)
+
     # --------------------------------------------------
-    # Requirement Extraction and Compliance Matrix
+    # Documents tab
     # --------------------------------------------------
-    st.markdown("---")
-    st.subheader("Requirement Extraction & Compliance Matrix")
-    st.caption("Extracts requirements from uploaded/captured documents and checks proposal compliance.")
+    with docs_tab:
+        st.subheader("Document Intelligence")
+        st.caption("Shows whether solicitation documents were captured, extracted, and available for AI analysis.")
 
-    requirements_key = f"{prefix}_requirements_{notice_id}"
-    compliance_key = f"{prefix}_compliance_matrix_{notice_id}"
+        docs_key = f"{prefix}_documents_{notice_id}"
 
-    col_extract_req, col_matrix = st.columns(2)
+        col_load_docs, col_process_docs, col_process_reviewed = st.columns(3)
 
-    with col_extract_req:
+        with col_load_docs:
+            if st.button("Load Documents", key=f"{prefix}_load_docs_{notice_id}"):
+                try:
+                    res = requests.get(f"{API}/documents/{notice_id}", timeout=30)
+
+                    if res.ok:
+                        st.session_state[docs_key] = res.json()
+                        st.success("Documents loaded.")
+                    else:
+                        st.error(res.text)
+
+                except Exception as exc:
+                    st.error(f"Failed to load documents: {exc}")
+
+        with col_process_docs:
+            if st.button("Process Pending Documents", key=f"{prefix}_process_docs_{notice_id}"):
+                try:
+                    res = requests.post(f"{API}/documents/process?limit=10", timeout=120)
+
+                    if res.ok:
+                        st.success(f"Processing result: {res.json()}")
+                    else:
+                        st.error(res.text)
+
+                except Exception as exc:
+                    st.error(f"Failed to process documents: {exc}")
+
+        with col_process_reviewed:
+            if st.button("Process Reviewed Docs", key=f"{prefix}_process_reviewed_docs_{notice_id}"):
+                try:
+                    if not profile_id:
+                        st.error("Load a profile first.")
+                    else:
+                        res = requests.post(f"{API}/documents/process-reviewed/{profile_id}?limit=10", timeout=120)
+
+                        if res.ok:
+                            st.success(f"Reviewed document processing result: {res.json()}")
+                        else:
+                            st.error(res.text)
+
+                except Exception as exc:
+                    st.error(f"Failed to process reviewed documents: {exc}")
+
+        documents = st.session_state.get(docs_key, [])
+
+        if documents:
+            complete_docs = [d for d in documents if d.get("extraction_status") == "complete"]
+            total_text = sum(d.get("text_length", 0) for d in documents)
+
+            dcol1, dcol2, dcol3 = st.columns(3)
+
+            with dcol1:
+                st.metric("Documents Found", len(documents))
+
+            with dcol2:
+                st.metric("Extracted", len(complete_docs))
+
+            with dcol3:
+                st.metric("Total Text Chars", total_text)
+
+            for doc in documents:
+                st.markdown("---")
+                st.write(f"**Name:** {doc.get('document_name', '')}")
+                st.write(f"**Status:** {doc.get('extraction_status', '')}")
+                st.write(f"**Text Length:** {doc.get('text_length', 0)}")
+
+                url = doc.get("document_url", "")
+                if url:
+                    st.markdown(f"[Open Source Link]({url})")
+
+                if doc.get("error_message"):
+                    st.error(doc.get("error_message"))
+
+                if doc.get("text_preview"):
+                    with st.expander("Preview Extracted Text"):
+                        st.write(doc.get("text_preview"))
+        else:
+            st.warning("No documents loaded for this opportunity. AI analysis may rely only on SAM metadata and human enrichment.")
+
+        st.markdown("---")
+        st.subheader("Manual Document Upload")
+        st.caption("Upload RFP, SOW, PWS, amendment, or contracting office documents received outside SAM.gov. Supported: PDF, DOCX, TXT.")
+
+        uploaded_file = st.file_uploader(
+            "Upload solicitation document",
+            type=["pdf", "docx", "txt"],
+            key=f"{prefix}_manual_upload_{notice_id}",
+        )
+
+        if uploaded_file:
+            if st.button("Upload and Extract Document", key=f"{prefix}_submit_manual_upload_{notice_id}"):
+                try:
+                    files = {
+                        "file": (
+                            uploaded_file.name,
+                            uploaded_file.getvalue(),
+                            uploaded_file.type or "application/octet-stream",
+                        )
+                    }
+
+                    res = requests.post(
+                        f"{API}/documents/upload?notice_id={notice_id}",
+                        files=files,
+                        timeout=120,
+                    )
+
+                    if res.ok:
+                        st.success(f"Upload result: {res.json()}")
+
+                        docs_res = requests.get(f"{API}/documents/{notice_id}", timeout=30)
+                        if docs_res.ok:
+                            st.session_state[docs_key] = docs_res.json()
+                    else:
+                        st.error(res.text)
+
+                except Exception as exc:
+                    st.error(f"Manual upload failed: {exc}")
+
+    # --------------------------------------------------
+    # Requirements tab
+    # --------------------------------------------------
+    with req_tab:
+        st.subheader("Requirement Extraction")
+        st.caption("Extracts requirements from uploaded/captured documents.")
+
+        requirements_key = f"{prefix}_requirements_{notice_id}"
+
         if st.button("Extract Requirements", key=f"{prefix}_extract_requirements_{notice_id}"):
             try:
                 res = requests.post(
@@ -744,43 +826,337 @@ def render_opportunity_tools(opp, prefix="main"):
                 )
 
                 if res.ok:
-                    st.session_state[requirements_key] = res.json()
-                    st.success("Requirements extracted.")
+                    result = res.json()
+                    st.session_state[requirements_key] = result
+                    save_analysis_output(profile_id, notice_id, "requirements", result)
+                    st.success("Requirements extracted and saved.")
                 else:
                     st.error(res.text)
 
             except Exception as exc:
                 st.error(f"Failed to extract requirements: {exc}")
 
-    requirements_result = st.session_state.get(requirements_key) or {}
+        requirements_result = st.session_state.get(requirements_key) or {}
 
-    if isinstance(requirements_result, dict) and requirements_result:
-        requirements = requirements_result.get("requirements", [])
+        if isinstance(requirements_result, dict) and requirements_result:
+            requirements = requirements_result.get("requirements", [])
 
-        st.write(f"### Extracted Requirements ({len(requirements)})")
+            st.write(f"### Extracted Requirements ({len(requirements)})")
 
-        if requirements:
-            for req in requirements:
-                with st.expander(f"{req.get('id', '')} | {req.get('category', '').title()} | {req.get('priority', '').title()}"):
-                    st.write(f"**Requirement:** {req.get('requirement', '')}")
-                    st.write(f"**Ambiguity:** {req.get('ambiguity', '')}")
-                    st.write(f"**Source Excerpt:** {req.get('source_excerpt', '')}")
-        else:
-            st.warning("No requirements extracted.")
+            if requirements:
+                for req in requirements:
+                    with st.expander(f"{req.get('id', '')} | {req.get('category', '').title()} | {req.get('priority', '').title()}"):
+                        st.write(f"**Requirement:** {req.get('requirement', '')}")
+                        st.write(f"**Ambiguity:** {req.get('ambiguity', '')}")
+                        st.write(f"**Source Excerpt:** {req.get('source_excerpt', '')}")
+            else:
+                st.warning("No requirements extracted.")
 
-        if requirements_result.get("missing_information"):
-            st.write("### Requirement Extraction Gaps")
-            for item in requirements_result.get("missing_information", []):
+            if requirements_result.get("missing_information"):
+                st.write("### Requirement Extraction Gaps")
+                for item in requirements_result.get("missing_information", []):
+                    st.write(f"- {item}")
+
+    # --------------------------------------------------
+    # Decision tab
+    # --------------------------------------------------
+    with decision_tab:
+        st.subheader("Historical Award Analysis")
+
+        awards_state_key = f"{prefix}_similar_awards_{notice_id}"
+        awards_summary_key = f"{prefix}_similar_awards_summary_{notice_id}"
+        awards_comparison_key = f"{prefix}_similar_awards_comparison_{notice_id}"
+
+        if st.button("Find Similar Awards", key=f"{prefix}_find_awards_button_{notice_id}"):
+            try:
+                res = requests.post(
+                    f"{API}/awards/similar",
+                    json={
+                        "profile_id": profile_id,
+                        "notice_id": notice_id,
+                        "title": opp.get("title", ""),
+                        "agency": opp.get("agency", ""),
+                        "naics_code": opp.get("naics_code", ""),
+                        "description": opp.get("description", ""),
+                    },
+                    timeout=120,
+                )
+
+                if res.ok:
+                    data = res.json()
+
+                    if isinstance(data, list):
+                        st.session_state[awards_state_key] = data
+                        st.session_state[awards_summary_key] = ""
+                        st.session_state[awards_comparison_key] = ""
+                    elif isinstance(data, dict):
+                        st.session_state[awards_state_key] = data.get("awards", [])
+                        st.session_state[awards_summary_key] = data.get("summary", "")
+                        st.session_state[awards_comparison_key] = data.get("comparison", "")
+                    else:
+                        st.session_state[awards_state_key] = []
+                        st.session_state[awards_summary_key] = ""
+                        st.session_state[awards_comparison_key] = ""
+
+                    st.success("Similar awards loaded.")
+                else:
+                    st.error(res.text)
+
+            except Exception as exc:
+                st.error(f"Failed to search similar awards: {exc}")
+
+        award_summary = st.session_state.get(awards_summary_key, "")
+        award_comparison = st.session_state.get(awards_comparison_key, "")
+        similar_awards = st.session_state.get(awards_state_key, [])
+
+        if award_summary:
+            st.write("### Market Insight")
+            st.write(award_summary)
+
+        if award_comparison:
+            st.write("### Win Feasibility")
+            st.write(award_comparison)
+
+        if isinstance(similar_awards, list) and similar_awards:
+            st.write("### Similar Historical Awards")
+
+            for award in similar_awards[:5]:
+                st.markdown("----")
+                st.write(f"**Recipient:** {award.get('recipient_name', '')}")
+                st.write(f"**Award ID:** {award.get('award_id', '')}")
+                st.write(f"**Amount:** {format_money(award.get('award_amount', ''))}")
+                st.write(f"**Agency:** {award.get('awarding_agency', '')}")
+                st.write(f"**Sub-Agency:** {award.get('awarding_sub_agency', '')}")
+                st.write(f"**Start Date:** {award.get('start_date', '')}")
+                st.write(f"**End Date:** {award.get('end_date', '')}")
+                st.write(f"**Award Type:** {award.get('award_type', '')}")
+
+                if award.get("description"):
+                    st.write(f"**Description:** {award.get('description', '')}")
+
+        st.markdown("---")
+        st.subheader("Full AI Decision Analysis")
+
+        decision_state_key = f"{prefix}_decision_analysis_{notice_id}"
+
+        if st.button("Run / Reanalyze Full AI Analysis", key=f"{prefix}_decision_button_{notice_id}"):
+            try:
+                awards_for_context = st.session_state.get(awards_state_key, [])
+
+                res = requests.post(
+                    f"{API}/decision/analyze",
+                    json={
+                        "profile_id": profile_id,
+                        "opportunity": opp,
+                        "awards": awards_for_context,
+                    },
+                    timeout=120,
+                )
+
+                if res.ok:
+                    result = res.json()
+                    st.session_state[decision_state_key] = result
+                    save_analysis_output(profile_id, notice_id, "decision_analysis", result)
+                    st.success("Decision analysis complete and saved.")
+                else:
+                    st.error(res.text)
+
+            except Exception as exc:
+                st.error(f"Failed to run decision analysis: {exc}")
+
+        decision = st.session_state.get(decision_state_key) or {}
+
+        if isinstance(decision, dict) and decision:
+            st.write("### Opportunity Summary")
+            st.write(decision.get("opportunity_summary", ""))
+
+            st.write("### Recommendation")
+            st.write(f"**{decision.get('decision', '')}**")
+            st.write(decision.get("decision_reasoning", ""))
+
+            st.write("### Key Requirements")
+            for item in decision.get("key_requirements", []):
                 st.write(f"- {item}")
 
-    with col_matrix:
-        if st.button("Build Compliance Matrix", key=f"{prefix}_build_matrix_{notice_id}"):
-            try:
-                proposal_draft_key = f"{prefix}_proposal_draft_{notice_id}"
-                review_key = f"{prefix}_proposal_review_{notice_id}"
+            st.write("### Risks")
+            for item in decision.get("risks", []):
+                st.write(f"- {item}")
 
-                proposal_draft = st.session_state.get(proposal_draft_key) or {}
-                review = st.session_state.get(review_key) or {}
+            st.write("### Suggested Approach")
+            st.write(decision.get("suggested_approach", ""))
+
+            st.write("### Confidence & Gaps")
+            st.write(f"**Confidence:** {decision.get('confidence', 0)}%")
+            for item in decision.get("missing_information", []):
+                st.write(f"- {item}")
+
+            if decision.get("evidence"):
+                st.write("### Evidence")
+                for item in decision.get("evidence", []):
+                    st.write(f"**Source:** {item.get('source', 'Unknown')}")
+                    st.write(f"- **Supports:** {item.get('claim', '')}")
+                    if item.get("excerpt"):
+                        st.write(f"- **Evidence:** {item.get('excerpt')}")
+
+            if decision.get("assumptions"):
+                st.write("### Assumptions")
+                for item in decision.get("assumptions", []):
+                    st.write(f"- {item}")
+
+    # --------------------------------------------------
+    # Proposal tab
+    # --------------------------------------------------
+    with proposal_tab:
+        st.subheader("Proposal Support")
+
+        proposal_state_key = f"{prefix}_proposal_plan_{notice_id}"
+
+        if st.button("Generate / Reanalyze Proposal Plan", key=f"{prefix}_proposal_button_{notice_id}"):
+            try:
+                awards_for_context = st.session_state.get(f"{prefix}_similar_awards_{notice_id}", [])
+
+                res = requests.post(
+                    f"{API}/proposal/plan",
+                    json={
+                        "profile_id": profile_id,
+                        "opportunity": opp,
+                        "awards": awards_for_context,
+                    },
+                    timeout=120,
+                )
+
+                if res.ok:
+                    result = res.json()
+                    st.session_state[proposal_state_key] = result
+                    save_analysis_output(profile_id, notice_id, "proposal_plan", result)
+                    st.success("Proposal plan generated and saved.")
+                else:
+                    st.error(res.text)
+
+            except Exception as exc:
+                st.error(f"Failed to generate proposal plan: {exc}")
+
+        proposal_plan = st.session_state.get(proposal_state_key) or {}
+
+        if isinstance(proposal_plan, dict) and proposal_plan:
+            if proposal_plan.get("error"):
+                st.error(proposal_plan.get("error"))
+            else:
+                st.write("### Summary")
+                st.write(proposal_plan.get("summary", ""))
+
+                st.write("### Key Requirements")
+                for item in proposal_plan.get("key_requirements", []):
+                    st.write(f"- {item}")
+
+                st.write("### Win Themes")
+                for item in proposal_plan.get("win_themes", []):
+                    st.write(f"- {item}")
+
+                st.write("### Differentiators")
+                for item in proposal_plan.get("differentiators", []):
+                    st.write(f"- {item}")
+
+                st.write("### Risks")
+                for item in proposal_plan.get("risks", []):
+                    st.write(f"- {item}")
+
+                st.write("### Teaming Strategy")
+                st.write(proposal_plan.get("teaming_strategy", ""))
+
+                st.write("### Proposal Outline")
+                for item in proposal_plan.get("proposal_outline", []):
+                    st.write(f"- {item}")
+
+                if proposal_plan.get("missing_information"):
+                    st.write("### Missing Information")
+                    for item in proposal_plan.get("missing_information", []):
+                        st.write(f"- {item}")
+
+                if proposal_plan.get("evidence"):
+                    st.write("### Evidence")
+                    for item in proposal_plan.get("evidence", []):
+                        st.write(f"**Source:** {item.get('source', 'Unknown')}")
+                        st.write(f"- **Supports:** {item.get('claim', '')}")
+                        if item.get("excerpt"):
+                            st.write(f"- **Evidence:** {item.get('excerpt')}")
+
+                if proposal_plan.get("assumptions"):
+                    st.write("### Assumptions")
+                    for item in proposal_plan.get("assumptions", []):
+                        st.write(f"- {item}")
+
+        st.markdown("---")
+        st.subheader("Full Proposal Draft")
+
+        proposal_draft_key = f"{prefix}_proposal_draft_{notice_id}"
+
+        if st.button("Generate / Reanalyze Full Proposal", key=f"{prefix}_proposal_draft_btn_{notice_id}"):
+            try:
+                res = requests.post(
+                    f"{API}/proposal/full",
+                    json={
+                        "profile_id": profile_id,
+                        "opportunity": opp,
+                        "proposal_plan": proposal_plan,
+                    },
+                    timeout=120,
+                )
+
+                if res.ok:
+                    result = res.json()
+                    st.session_state[proposal_draft_key] = result
+                    save_analysis_output(profile_id, notice_id, "proposal_draft", result)
+                    st.success("Full proposal draft generated and saved.")
+                else:
+                    st.error(res.text)
+
+            except Exception as exc:
+                st.error(f"Failed to generate proposal: {exc}")
+
+        draft = st.session_state.get(proposal_draft_key) or {}
+
+        if isinstance(draft, dict) and draft:
+            st.write("## Executive Summary")
+            st.write(draft.get("executive_summary", ""))
+
+            st.write("## Technical Approach")
+            st.write(draft.get("technical_approach", ""))
+
+            st.write("## Management Plan")
+            st.write(draft.get("management_plan", ""))
+
+            st.write("## Past Performance")
+            st.write(draft.get("past_performance", ""))
+
+            st.write("## Staffing Plan")
+            st.write(draft.get("staffing_plan", ""))
+
+            if draft.get("assumptions"):
+                st.write("## Assumptions")
+                for item in draft.get("assumptions", []):
+                    st.write(f"- {item}")
+
+            if draft.get("missing_information"):
+                st.write("## Missing Information")
+                for item in draft.get("missing_information", []):
+                    st.write(f"- {item}")
+
+    # --------------------------------------------------
+    # Compliance tab
+    # --------------------------------------------------
+    with compliance_tab:
+        st.subheader("Compliance Matrix")
+
+        requirements_key = f"{prefix}_requirements_{notice_id}"
+        compliance_key = f"{prefix}_compliance_matrix_{notice_id}"
+
+        requirements_result = st.session_state.get(requirements_key) or {}
+
+        if st.button("Build / Rebuild Compliance Matrix", key=f"{prefix}_build_matrix_{notice_id}"):
+            try:
+                proposal_draft = st.session_state.get(f"{prefix}_proposal_draft_{notice_id}") or {}
+                review = st.session_state.get(f"{prefix}_proposal_review_{notice_id}") or {}
                 revised_proposal = {}
 
                 if isinstance(review, dict):
@@ -803,449 +1179,92 @@ def render_opportunity_tools(opp, prefix="main"):
                     )
 
                     if res.ok:
-                        st.session_state[compliance_key] = res.json()
-                        st.success("Compliance matrix generated.")
+                        result = res.json()
+                        st.session_state[compliance_key] = result
+                        save_analysis_output(profile_id, notice_id, "compliance_matrix", result)
+                        st.success("Compliance matrix generated and saved.")
                     else:
                         st.error(res.text)
 
             except Exception as exc:
                 st.error(f"Failed to build compliance matrix: {exc}")
 
-    compliance = st.session_state.get(compliance_key) or {}
+        compliance = st.session_state.get(compliance_key) or {}
 
-    if isinstance(compliance, dict) and compliance:
-        st.write("### Compliance Readiness")
-        st.write(f"**Overall Status:** {compliance.get('overall_status', '')}")
-        st.write(compliance.get("summary", ""))
+        if isinstance(compliance, dict) and compliance:
+            st.write("### Compliance Readiness")
+            st.write(f"**Overall Status:** {compliance.get('overall_status', '')}")
+            st.write(compliance.get("summary", ""))
 
-        matrix = compliance.get("matrix", [])
+            matrix = compliance.get("matrix", [])
 
-        if matrix:
-            st.write("### Compliance Matrix")
+            if matrix:
+                st.write("### Compliance Matrix")
 
-            for row in matrix:
-                status = row.get("status", "")
-                req_id = row.get("requirement_id", "")
-                category = row.get("category", "")
+                for row in matrix:
+                    with st.expander(f"{row.get('requirement_id', '')} | {row.get('category', '').title()} | {row.get('status', '')}"):
+                        st.write(f"**Requirement:** {row.get('requirement', '')}")
+                        st.write(f"**Proposal Section:** {row.get('proposal_section', '')}")
+                        st.write(f"**Evidence From Proposal:** {row.get('evidence_from_proposal', '')}")
+                        st.write(f"**Gap:** {row.get('gap', '')}")
+                        st.write(f"**Recommended Fix:** {row.get('recommended_fix', '')}")
 
-                with st.expander(f"{req_id} | {category.title()} | {status}"):
-                    st.write(f"**Requirement:** {row.get('requirement', '')}")
-                    st.write(f"**Proposal Section:** {row.get('proposal_section', '')}")
-                    st.write(f"**Evidence From Proposal:** {row.get('evidence_from_proposal', '')}")
-                    st.write(f"**Gap:** {row.get('gap', '')}")
-                    st.write(f"**Recommended Fix:** {row.get('recommended_fix', '')}")
-
-        if compliance.get("major_gaps"):
-            st.write("### Major Gaps")
-            for item in compliance.get("major_gaps", []):
-                st.write(f"- {item}")
-
-        if compliance.get("unsupported_claims"):
-            st.write("### Unsupported Claims")
-            for item in compliance.get("unsupported_claims", []):
-                st.write(f"- {item}")
-
-        if compliance.get("recommended_next_steps"):
-            st.write("### Recommended Next Steps")
-            for item in compliance.get("recommended_next_steps", []):
-                st.write(f"- {item}")          
-    # --------------------------------------------------
-    # Human enrichment
-    # --------------------------------------------------
-    render_enrichment_form(notice_id)
-
-    # --------------------------------------------------
-    # Review buttons
-    # --------------------------------------------------
-    st.subheader("Review Decision")
-
-    col_good, col_maybe, col_bad = st.columns(3)
-
-    with col_good:
-        if st.button("Good Fit", key=f"{prefix}_good_{notice_id}"):
-            res = requests.post(
-                f"{API}/reviews",
-                json={
-                    "profile_id": st.session_state["profile_id"],
-                    "notice_id": notice_id,
-                    "disposition": "Good Fit",
-                    "reviewer_notes": "",
-                },
-                timeout=30,
-            )
-
-            if res.ok:
-                st.success("Saved Good Fit")
-                fetch_saved_reviews()
-                st.rerun()
-            else:
-                st.error(res.text)
-
-    with col_maybe:
-        if st.button("Maybe", key=f"{prefix}_maybe_{notice_id}"):
-            res = requests.post(
-                f"{API}/reviews",
-                json={
-                    "profile_id": st.session_state["profile_id"],
-                    "notice_id": notice_id,
-                    "disposition": "Maybe",
-                    "reviewer_notes": "",
-                },
-                timeout=30,
-            )
-
-            if res.ok:
-                st.success("Saved Maybe")
-                fetch_saved_reviews()
-                st.rerun()
-            else:
-                st.error(res.text)
-
-    with col_bad:
-        if st.button("Bad Fit", key=f"{prefix}_bad_{notice_id}"):
-            res = requests.post(
-                f"{API}/reviews",
-                json={
-                    "profile_id": st.session_state["profile_id"],
-                    "notice_id": notice_id,
-                    "disposition": "Bad Fit",
-                    "reviewer_notes": "",
-                },
-                timeout=30,
-            )
-
-            if res.ok:
-                st.success("Saved Bad Fit")
-                fetch_saved_reviews()
-                st.rerun()
-            else:
-                st.error(res.text)
-
-    # --------------------------------------------------
-    # Historical award analysis
-    # --------------------------------------------------
-    st.markdown("---")
-    st.subheader("Historical Award Analysis")
-
-    awards_state_key = f"{prefix}_similar_awards_{notice_id}"
-    awards_summary_key = f"{prefix}_similar_awards_summary_{notice_id}"
-    awards_comparison_key = f"{prefix}_similar_awards_comparison_{notice_id}"
-    awards_button_key = f"{prefix}_find_awards_button_{notice_id}"
-
-    if st.button("Find Similar Awards", key=awards_button_key):
-        try:
-            res = requests.post(
-                f"{API}/awards/similar",
-                json={
-                    "profile_id": st.session_state.get("profile_id"),
-                    "notice_id": notice_id,
-                    "title": opp.get("title", ""),
-                    "agency": opp.get("agency", ""),
-                    "naics_code": opp.get("naics_code", ""),
-                    "description": opp.get("description", ""),
-                },
-                timeout=120,
-            )
-
-            if res.ok:
-                data = res.json()
-
-                if isinstance(data, list):
-                    st.session_state[awards_state_key] = data
-                    st.session_state[awards_summary_key] = ""
-                    st.session_state[awards_comparison_key] = ""
-                elif isinstance(data, dict):
-                    st.session_state[awards_state_key] = data.get("awards", [])
-                    st.session_state[awards_summary_key] = data.get("summary", "")
-                    st.session_state[awards_comparison_key] = data.get("comparison", "")
-                else:
-                    st.session_state[awards_state_key] = []
-                    st.session_state[awards_summary_key] = ""
-                    st.session_state[awards_comparison_key] = ""
-
-                st.success("Similar awards loaded.")
-            else:
-                st.error(res.text)
-
-        except Exception as exc:
-            st.error(f"Failed to search similar awards: {exc}")
-
-    award_summary = st.session_state.get(awards_summary_key, "")
-    award_comparison = st.session_state.get(awards_comparison_key, "")
-    similar_awards = st.session_state.get(awards_state_key, [])
-
-    if award_summary:
-        st.write("### Market Insight")
-        st.write(award_summary)
-
-    if award_comparison:
-        st.write("### Win Feasibility")
-        st.write(award_comparison)
-
-    if isinstance(similar_awards, list) and similar_awards:
-        st.write("### Similar Historical Awards")
-
-        for award in similar_awards[:5]:
-            st.markdown("----")
-            st.write(f"**Recipient:** {award.get('recipient_name', '')}")
-            st.write(f"**Award ID:** {award.get('award_id', '')}")
-            st.write(f"**Amount:** {format_money(award.get('award_amount', ''))}")
-            st.write(f"**Agency:** {award.get('awarding_agency', '')}")
-            st.write(f"**Sub-Agency:** {award.get('awarding_sub_agency', '')}")
-            st.write(f"**Start Date:** {award.get('start_date', '')}")
-            st.write(f"**End Date:** {award.get('end_date', '')}")
-            st.write(f"**Award Type:** {award.get('award_type', '')}")
-
-            if award.get("description"):
-                st.write(f"**Description:** {award.get('description', '')}")
-
-    # --------------------------------------------------
-    # Full AI decision analysis
-    # --------------------------------------------------
-    st.markdown("---")
-    st.subheader("Full AI Decision Analysis")
-
-    decision_state_key = f"{prefix}_decision_analysis_{notice_id}"
-
-    if st.button("Run Full AI Analysis", key=f"{prefix}_decision_button_{notice_id}"):
-        try:
-            awards_for_context = st.session_state.get(awards_state_key, [])
-
-            res = requests.post(
-                f"{API}/decision/analyze",
-                json={
-                    "profile_id": st.session_state.get("profile_id"),
-                    "opportunity": opp,
-                    "awards": awards_for_context,
-                },
-                timeout=120,
-            )
-
-            if res.ok:
-                st.session_state[decision_state_key] = res.json()
-                st.success("Decision analysis complete.")
-            else:
-                st.error(res.text)
-
-        except Exception as exc:
-            st.error(f"Failed to run decision analysis: {exc}")
-
-    decision = st.session_state.get(decision_state_key) or {}
-
-    if isinstance(decision, dict) and decision:
-        st.write("### Opportunity Summary")
-        st.write(decision.get("opportunity_summary", ""))
-
-        st.write("### Recommendation")
-        st.write(f"**{decision.get('decision', '')}**")
-        st.write(decision.get("decision_reasoning", ""))
-
-        st.write("### Key Requirements")
-        for item in decision.get("key_requirements", []):
-            st.write(f"- {item}")
-
-        st.write("### Risks")
-        for item in decision.get("risks", []):
-            st.write(f"- {item}")
-
-        st.write("### Suggested Approach")
-        st.write(decision.get("suggested_approach", ""))
-
-        st.write("### Confidence & Gaps")
-        st.write(f"**Confidence:** {decision.get('confidence', 0)}%")
-        for item in decision.get("missing_information", []):
-            st.write(f"- {item}")
-
-    if decision.get("evidence"):
-        st.write("### Evidence")
-        for item in decision.get("evidence", []):
-            source = item.get("source", "Unknown")
-            claim = item.get("claim", "")
-            excerpt = item.get("excerpt", "")
-            st.write(f"**Source:** {source}")
-            st.write(f"- **Supports:** {claim}")
-            if excerpt:
-                st.write(f"- **Evidence:** {excerpt}")
-
-    if decision.get("assumptions"):
-        st.write("### Assumptions")
-        for item in decision.get("assumptions", []):
-            st.write(f"- {item}")
-
-    # --------------------------------------------------
-    # Proposal support
-    # --------------------------------------------------
-    st.markdown("---")
-    st.subheader("Proposal Support")
-    st.caption("AI-generated proposal strategy based on your profile, the opportunity, similar historical awards, and human-provided opportunity context.")
-
-    proposal_state_key = f"{prefix}_proposal_plan_{notice_id}"
-    proposal_button_key = f"{prefix}_proposal_button_{notice_id}"
-
-    if st.button("Generate Proposal Plan", key=proposal_button_key):
-        try:
-            awards_for_context = st.session_state.get(awards_state_key, [])
-
-            res = requests.post(
-                f"{API}/proposal/plan",
-                json={
-                    "profile_id": st.session_state.get("profile_id"),
-                    "opportunity": opp,
-                    "awards": awards_for_context,
-                },
-                timeout=120,
-            )
-
-            if res.ok:
-                st.session_state[proposal_state_key] = res.json()
-                st.success("Proposal plan generated.")
-            else:
-                st.error(res.text)
-
-        except Exception as exc:
-            st.error(f"Failed to generate proposal plan: {exc}")
-
-    proposal_plan = st.session_state.get(proposal_state_key) or {}
-
-    if isinstance(proposal_plan, dict) and proposal_plan:
-        if proposal_plan.get("error"):
-            st.error(proposal_plan.get("error"))
-        else:
-            st.write("### Summary")
-            st.write(proposal_plan.get("summary", ""))
-
-            st.write("### Key Requirements")
-            for item in proposal_plan.get("key_requirements", []):
-                st.write(f"- {item}")
-
-            st.write("### Win Themes")
-            for item in proposal_plan.get("win_themes", []):
-                st.write(f"- {item}")
-
-            st.write("### Differentiators")
-            for item in proposal_plan.get("differentiators", []):
-                st.write(f"- {item}")
-
-            st.write("### Risks")
-            for item in proposal_plan.get("risks", []):
-                st.write(f"- {item}")
-
-            st.write("### Teaming Strategy")
-            st.write(proposal_plan.get("teaming_strategy", ""))
-
-            st.write("### Proposal Outline")
-            for item in proposal_plan.get("proposal_outline", []):
-                st.write(f"- {item}")
-
-            if proposal_plan.get("missing_information"):
-                st.write("### Missing Information")
-                for item in proposal_plan.get("missing_information", []):
+            if compliance.get("major_gaps"):
+                st.write("### Major Gaps")
+                for item in compliance.get("major_gaps", []):
                     st.write(f"- {item}")
 
-    if proposal_plan.get("evidence"):
-        st.write("### Evidence")
-        for item in proposal_plan.get("evidence", []):
-            source = item.get("source", "Unknown")
-            claim = item.get("claim", "")
-            excerpt = item.get("excerpt", "")
-            st.write(f"**Source:** {source}")
-            st.write(f"- **Supports:** {claim}")
-            if excerpt:
-                st.write(f"- **Evidence:** {excerpt}")
+            if compliance.get("unsupported_claims"):
+                st.write("### Unsupported Claims")
+                for item in compliance.get("unsupported_claims", []):
+                    st.write(f"- {item}")
 
-    if proposal_plan.get("assumptions"):
-        st.write("### Assumptions")
-        for item in proposal_plan.get("assumptions", []):
-            st.write(f"- {item}")
+            if compliance.get("recommended_next_steps"):
+                st.write("### Recommended Next Steps")
+                for item in compliance.get("recommended_next_steps", []):
+                    st.write(f"- {item}")
 
     # --------------------------------------------------
-    # Full Proposal Draft
+    # Advisor Review tab
     # --------------------------------------------------
-    st.markdown("---")
-    st.subheader("Full Proposal Draft")
-
-    proposal_draft_key = f"{prefix}_proposal_draft_{notice_id}"
-
-    if st.button("Generate Full Proposal", key=f"{prefix}_proposal_draft_btn_{notice_id}"):
-        try:
-            res = requests.post(
-                f"{API}/proposal/full",
-                json={
-                    "profile_id": st.session_state.get("profile_id"),
-                    "opportunity": opp,
-                    "proposal_plan": proposal_plan,
-                },
-                timeout=120,
-            )
-
-            if res.ok:
-                st.session_state[proposal_draft_key] = res.json()
-                st.success("Full proposal draft generated.")
-            else:
-                st.error(res.text)
-
-        except Exception as exc:
-            st.error(f"Failed to generate proposal: {exc}")
-
-    draft = st.session_state.get(proposal_draft_key) or {}
-
-    if isinstance(draft, dict) and draft:
-        st.write("## Executive Summary")
-        st.write(draft.get("executive_summary", ""))
-
-        st.write("## Technical Approach")
-        st.write(draft.get("technical_approach", ""))
-
-        st.write("## Management Plan")
-        st.write(draft.get("management_plan", ""))
-
-        st.write("## Past Performance")
-        st.write(draft.get("past_performance", ""))
-
-        st.write("## Staffing Plan")
-        st.write(draft.get("staffing_plan", ""))
-
-        if draft.get("assumptions"):
-            st.write("## Assumptions")
-            for item in draft.get("assumptions", []):
-                st.write(f"- {item}")
-
-        if draft.get("missing_information"):
-            st.write("## Missing Information")
-            for item in draft.get("missing_information", []):
-                st.write(f"- {item}")
-        # --------------------------------------------------
-        # Senior Capture Advisor Review
-        # --------------------------------------------------
-        st.markdown("---")
+    with advisor_tab:
         st.subheader("Senior Capture Advisor Review")
-        st.caption("Reviews the proposal for compliance, clarity, screening risk, and competitiveness.")
 
-        review_key = f"{prefix}_proposal_review_{notice_id}"
+        proposal_draft_key = f"{prefix}_proposal_draft_{notice_id}"
+        proposal_review_key = f"{prefix}_proposal_review_{notice_id}"
 
-        if st.button("Run Senior Capture Review", key=f"{prefix}_proposal_review_btn_{notice_id}"):
+        draft = st.session_state.get(proposal_draft_key) or {}
+
+        if st.button("Run / Reanalyze Senior Capture Review", key=f"{prefix}_proposal_review_btn_{notice_id}"):
             try:
-                res = requests.post(
-                    f"{API}/proposal/review",
-                    json={
-                        "profile_id": st.session_state.get("profile_id"),
-                        "opportunity": opp,
-                        "proposal_plan": proposal_plan,
-                        "proposal_draft": draft,
-                    },
-                    timeout=120,
-                )
+                proposal_plan = st.session_state.get(f"{prefix}_proposal_plan_{notice_id}") or {}
 
-                if res.ok:
-                    st.session_state[review_key] = res.json()
-                    st.success("Senior capture review complete.")
+                if not draft:
+                    st.error("Generate a proposal draft first.")
                 else:
-                    st.error(res.text)
+                    res = requests.post(
+                        f"{API}/proposal/review",
+                        json={
+                            "profile_id": profile_id,
+                            "opportunity": opp,
+                            "proposal_plan": proposal_plan,
+                            "proposal_draft": draft,
+                        },
+                        timeout=120,
+                    )
+
+                    if res.ok:
+                        result = res.json()
+                        st.session_state[proposal_review_key] = result
+                        save_analysis_output(profile_id, notice_id, "advisor_review", result)
+                        st.success("Senior capture review complete and saved.")
+                    else:
+                        st.error(res.text)
 
             except Exception as exc:
                 st.error(f"Failed to run senior capture review: {exc}")
 
-        review = st.session_state.get(review_key) or {}
+        review = st.session_state.get(proposal_review_key) or {}
 
         if isinstance(review, dict) and review:
             st.write("### Overall Assessment")
@@ -1270,24 +1289,12 @@ def render_opportunity_tools(opp, prefix="main"):
                 st.write(f"- {item}")
 
             revised = review.get("revised_proposal", {})
-
             if isinstance(revised, dict) and revised:
                 st.write("### Revised Proposal Draft")
 
-                st.write("#### Executive Summary")
-                st.write(revised.get("executive_summary", ""))
-
-                st.write("#### Technical Approach")
-                st.write(revised.get("technical_approach", ""))
-
-                st.write("#### Management Plan")
-                st.write(revised.get("management_plan", ""))
-
-                st.write("#### Past Performance")
-                st.write(revised.get("past_performance", ""))
-
-                st.write("#### Staffing Plan")
-                st.write(revised.get("staffing_plan", ""))                
+                for section in ["executive_summary", "technical_approach", "management_plan", "past_performance", "staffing_plan"]:
+                    st.write(f"#### {section.replace('_', ' ').title()}")
+                    st.write(revised.get(section, ""))
 
             if review.get("assumptions"):
                 st.write("### Assumptions")
@@ -1299,47 +1306,136 @@ def render_opportunity_tools(opp, prefix="main"):
                 for item in review.get("missing_information", []):
                     st.write(f"- {item}")
 
-            # --------------------------------------------------
-            # DOWNLOAD WORD DOCUMENT
-            # --------------------------------------------------
-            revised_for_export = {}
+        st.markdown("---")
+        st.subheader("Final Review After Compliance Matrix")
 
-            if isinstance(review, dict) and review:
-                revised_for_export = review.get("revised_proposal", {}) or {}
+        final_review_key = f"{prefix}_final_review_{notice_id}"
 
-            if isinstance(revised_for_export, dict) and revised_for_export:
-                download_key = f"{prefix}_proposal_docx_{notice_id}"
+        if st.button("Run Final Review After Compliance Matrix", key=f"{prefix}_final_review_btn_{notice_id}"):
+            try:
+                proposal_draft = st.session_state.get(f"{prefix}_proposal_draft_{notice_id}") or {}
+                advisor_review = st.session_state.get(f"{prefix}_proposal_review_{notice_id}") or {}
+                compliance_matrix = st.session_state.get(f"{prefix}_compliance_matrix_{notice_id}") or {}
 
-                if st.button("Prepare Word Document", key=f"{prefix}_prepare_docx_{notice_id}"):
-                    try:
-                        export_res = requests.post(
-                            f"{API}/proposal/export-docx",
-                            json={
-                                "revised_proposal": revised_for_export,
-                                "review": review,
-                            },
-                            timeout=120,
-                        )
-
-                        if export_res.ok:
-                            st.session_state[download_key] = export_res.content
-                            st.success("Document ready for download.")
-                        else:
-                            st.error("Failed to generate Word document.")
-
-                    except Exception as exc:
-                        st.error(f"Export failed: {exc}")
-
-                docx_data = st.session_state.get(download_key)
-
-                if docx_data:
-                    st.download_button(
-                        label="Download Revised Proposal as Word Document",
-                        data=docx_data,
-                        file_name="revised_proposal_draft.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key=f"{prefix}_download_docx_{notice_id}",
+                if not proposal_draft:
+                    st.error("Generate a proposal draft first.")
+                elif not advisor_review:
+                    st.error("Run Senior Capture Review first.")
+                elif not compliance_matrix:
+                    st.error("Build Compliance Matrix first.")
+                else:
+                    res = requests.post(
+                        f"{API}/proposal/final-review",
+                        json={
+                            "profile_id": profile_id,
+                            "opportunity": opp,
+                            "proposal_draft": proposal_draft,
+                            "advisor_review": advisor_review,
+                            "compliance_matrix": compliance_matrix,
+                        },
+                        timeout=120,
                     )
+
+                    if res.ok:
+                        result = res.json()
+                        st.session_state[final_review_key] = result
+                        save_analysis_output(profile_id, notice_id, "final_review", result)
+                        st.success("Final compliance-based review complete and saved.")
+                    else:
+                        st.error(res.text)
+
+            except Exception as exc:
+                st.error(f"Failed to run final review: {exc}")
+
+        final_review = st.session_state.get(final_review_key) or {}
+
+        if isinstance(final_review, dict) and final_review:
+            st.write("### Final Readiness Assessment")
+            st.write(final_review.get("final_readiness_assessment", ""))
+
+            st.write(f"**Readiness Score:** {final_review.get('proposal_readiness_score', 0)} / 100")
+
+            st.write("### Highest Priority Fixes")
+            for item in final_review.get("highest_priority_fixes", []):
+                st.write(f"- {item}")
+
+            revisions = final_review.get("compliance_driven_revisions", {})
+            if isinstance(revisions, dict) and revisions:
+                st.write("### Compliance-Driven Revisions")
+                for section, text in revisions.items():
+                    st.write(f"#### {section.replace('_', ' ').title()}")
+                    st.write(text)
+
+            st.write("### Remaining Compliance Risks")
+            for item in final_review.get("remaining_compliance_risks", []):
+                st.write(f"- {item}")
+
+            st.write("### Remaining Unsupported Claims")
+            for item in final_review.get("remaining_unsupported_claims", []):
+                st.write(f"- {item}")
+
+            st.write("### Recommended Next Steps")
+            for item in final_review.get("recommended_next_steps", []):
+                st.write(f"- {item}")
+
+    # --------------------------------------------------
+    # Export tab
+    # --------------------------------------------------
+    with export_tab:
+        st.subheader("Export")
+
+        review = st.session_state.get(f"{prefix}_proposal_review_{notice_id}") or {}
+        final_review = st.session_state.get(f"{prefix}_final_review_{notice_id}") or {}
+
+        revised_for_export = {}
+
+        if isinstance(final_review, dict) and final_review.get("compliance_driven_revisions"):
+            revised_for_export = final_review.get("compliance_driven_revisions", {}) or {}
+            export_review_payload = final_review
+            st.info("Export will use final compliance-driven revisions.")
+        elif isinstance(review, dict) and review.get("revised_proposal"):
+            revised_for_export = review.get("revised_proposal", {}) or {}
+            export_review_payload = review
+            st.info("Export will use senior advisor revised proposal.")
+        else:
+            export_review_payload = {}
+            st.warning("Run Senior Capture Review or Final Review before exporting.")
+
+        if isinstance(revised_for_export, dict) and revised_for_export:
+            download_key = f"{prefix}_proposal_docx_{notice_id}"
+
+            if st.button("Prepare Word Document", key=f"{prefix}_prepare_docx_{notice_id}"):
+                try:
+                    export_res = requests.post(
+                        f"{API}/proposal/export-docx",
+                        json={
+                            "revised_proposal": revised_for_export,
+                            "review": export_review_payload,
+                        },
+                        timeout=120,
+                    )
+
+                    if export_res.ok:
+                        st.session_state[download_key] = export_res.content
+                        st.success("Document ready for download.")
+                    else:
+                        st.error("Failed to generate Word document.")
+
+                except Exception as exc:
+                    st.error(f"Export failed: {exc}")
+
+            docx_data = st.session_state.get(download_key)
+
+            if docx_data:
+                st.download_button(
+                    label="Download Revised Proposal as Word Document",
+                    data=docx_data,
+                    file_name="revised_proposal_draft.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key=f"{prefix}_download_docx_{notice_id}",
+                )
+
+
 # --------------------------------------------------
 # Ranked results section
 # --------------------------------------------------
@@ -1411,6 +1507,9 @@ else:
                 st.session_state["reviewed_opps"] = res.json()
             else:
                 st.error(res.text)
+        else:
+            st.session_state["reviewed_opps"] = []
+            st.info("No reviewed opportunities found.")
 
     reviewed_opps = st.session_state.get("reviewed_opps", [])
     reviews = st.session_state.get("reviews", [])

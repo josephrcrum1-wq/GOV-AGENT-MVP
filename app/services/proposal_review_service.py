@@ -183,3 +183,99 @@ Return ONLY valid JSON with this exact structure:
             "unsupported_claims_removed_or_flagged": [],
             "requirement_traceability_notes": [],
         }
+    
+
+def review_proposal_after_compliance(
+    db,
+    profile,
+    opportunity: dict,
+    proposal_draft: dict,
+    advisor_review: dict,
+    compliance_matrix: dict,
+    enrichment: dict | None = None,
+) -> dict:
+    enrichment = enrichment or {}
+
+    prompt = f"""
+You are a senior government capture advisor performing a FINAL review after compliance matrix generation.
+
+Your job:
+- Review the proposal draft, prior advisor review, and compliance matrix.
+- Focus on compliance gaps, missing evidence, unsupported claims, and proposal readiness.
+- Do NOT invent facts, metrics, or compliance.
+- Do NOT claim a requirement is met unless the compliance matrix supports it.
+- Use bracketed placeholders where verification is needed.
+- Recommend practical next edits before submission.
+
+COMPANY PROFILE:
+Company: {getattr(profile, "company_name", "")}
+Capabilities: {getattr(profile, "capability_summary", "")}
+Past Performance: {getattr(profile, "past_performance_summary", "")}
+
+OPPORTUNITY:
+{json.dumps(opportunity, indent=2)}
+
+HUMAN CONTEXT:
+{json.dumps(enrichment, indent=2)}
+
+PROPOSAL DRAFT:
+{json.dumps(proposal_draft, indent=2)}
+
+PRIOR ADVISOR REVIEW:
+{json.dumps(advisor_review, indent=2)}
+
+COMPLIANCE MATRIX:
+{json.dumps(compliance_matrix, indent=2)}
+
+Return ONLY valid JSON:
+
+{{
+  "final_readiness_assessment": "Clear assessment of whether this is ready, partially ready, or not ready.",
+  "proposal_readiness_score": 0,
+  "highest_priority_fixes": ["fix 1", "fix 2"],
+  "compliance_driven_revisions": {{
+    "executive_summary": "...",
+    "technical_approach": "...",
+    "management_plan": "...",
+    "past_performance": "...",
+    "staffing_plan": "..."
+  }},
+  "remaining_compliance_risks": ["risk 1"],
+  "remaining_unsupported_claims": ["claim 1"],
+  "recommended_next_steps": ["step 1"]
+}}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Return only valid JSON. Do not invent unsupported facts."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+
+        result = json.loads(response.choices[0].message.content)
+
+        result.setdefault("final_readiness_assessment", "")
+        result.setdefault("proposal_readiness_score", 0)
+        result.setdefault("highest_priority_fixes", [])
+        result.setdefault("compliance_driven_revisions", {})
+        result.setdefault("remaining_compliance_risks", [])
+        result.setdefault("remaining_unsupported_claims", [])
+        result.setdefault("recommended_next_steps", [])
+
+        return result
+
+    except Exception as exc:
+        return {
+            "final_readiness_assessment": "Final compliance review failed.",
+            "proposal_readiness_score": 0,
+            "highest_priority_fixes": [str(exc)],
+            "compliance_driven_revisions": {},
+            "remaining_compliance_risks": [],
+            "remaining_unsupported_claims": [],
+            "recommended_next_steps": [],
+        }

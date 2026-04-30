@@ -28,6 +28,8 @@ from app.services.requirement_service import (
     extract_requirements_from_documents,
     build_compliance_matrix,
 )
+from app.services import analysis_service
+from app.services.proposal_review_service import review_proposal_draft, review_proposal_after_compliance
 
 
 Base.metadata.create_all(bind=engine)
@@ -460,4 +462,46 @@ def compliance_matrix(payload: dict, db: Session = Depends(get_db)):
         requirements_result=payload.get("requirements_result", {}),
         proposal_draft=payload.get("proposal_draft", {}),
         revised_proposal=payload.get("revised_proposal", {}),
+    )
+
+@app.get("/analysis/{profile_id}/{notice_id}")
+def load_analysis(profile_id: int, notice_id: str, db: Session = Depends(get_db)):
+    return analysis_service.load_all_analysis(
+        db=db,
+        profile_id=profile_id,
+        notice_id=notice_id,
+    )
+
+
+@app.post("/analysis/save")
+def save_analysis(payload: dict, db: Session = Depends(get_db)):
+    return analysis_service.save_analysis(
+        db=db,
+        profile_id=payload["profile_id"],
+        notice_id=payload["notice_id"],
+        analysis_type=payload["analysis_type"],
+        payload=payload.get("payload", {}),
+    )
+
+@app.post("/proposal/final-review")
+def final_proposal_review(payload: dict, db: Session = Depends(get_db)):
+    profile = profile_service.get_profile_by_id(db, payload["profile_id"])
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    enrichment = enrichment_service.get_enrichment(
+        db,
+        profile_id=payload["profile_id"],
+        notice_id=payload["opportunity"].get("notice_id", ""),
+    ) or {}
+
+    return review_proposal_after_compliance(
+        db=db,
+        profile=profile,
+        opportunity=payload.get("opportunity", {}),
+        proposal_draft=payload.get("proposal_draft", {}),
+        advisor_review=payload.get("advisor_review", {}),
+        compliance_matrix=payload.get("compliance_matrix", {}),
+        enrichment=enrichment,
     )
