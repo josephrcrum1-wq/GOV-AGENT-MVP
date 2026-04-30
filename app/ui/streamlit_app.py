@@ -684,11 +684,11 @@ def render_opportunity_tools(opp, prefix="main"):
 
     st.markdown("---")
     st.subheader("Manual Document Upload")
-    st.caption("Upload RFP, SOW, PWS, amendment, or contracting office documents received outside SAM.gov.")
+    st.caption("Upload RFP, SOW, PWS, amendment, or contracting office documents received outside SAM.gov. Supported: PDF, DOCX, TXT.")
 
     uploaded_file = st.file_uploader(
-        "Upload PDF document",
-        type=["pdf"],
+        "Upload solicitation document",
+        type=["pdf", "docx", "txt"],
         key=f"{prefix}_manual_upload_{notice_id}",
     )
 

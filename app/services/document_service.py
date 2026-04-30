@@ -1,5 +1,7 @@
+import os
 import requests
 import fitz
+from docx import Document
 from sqlalchemy.orm import Session
 from fastapi import UploadFile
 
@@ -19,7 +21,7 @@ def save_document_links(db: Session, notice_id: str, document_links: list[dict])
             {
                 "notice_id": notice_id,
                 "document_url": url,
-                "document_name": link.get("name", ""),
+                "document_name": link.get("name", "") or url.split("/")[-1],
                 "document_type": link.get("type", "unknown"),
                 "extraction_status": "pending",
             },
@@ -29,33 +31,86 @@ def save_document_links(db: Session, notice_id: str, document_links: list[dict])
     return saved
 
 
-def extract_pdf_text_from_url(url: str) -> str:
+def infer_file_type(name_or_url: str, content_type: str = "") -> str:
+    value = (name_or_url or "").lower()
+    content_type = (content_type or "").lower()
+
+    if value.endswith(".pdf") or "pdf" in content_type:
+        return "pdf"
+
+    if value.endswith(".docx") or "wordprocessingml" in content_type:
+        return "docx"
+
+    if value.endswith(".txt") or "text/plain" in content_type:
+        return "txt"
+
+    return "unknown"
+
+
+def extract_pdf_text_from_bytes(file_bytes: bytes) -> str:
+    doc = fitz.open(stream=file_bytes, filetype="pdf")
+    text_parts = [page.get_text() for page in doc]
+    return "\n".join(text_parts).strip()
+
+
+def extract_docx_text_from_bytes(file_bytes: bytes) -> str:
+    import io
+
+    file_stream = io.BytesIO(file_bytes)
+    document = Document(file_stream)
+
+    parts = []
+
+    for paragraph in document.paragraphs:
+        if paragraph.text.strip():
+            parts.append(paragraph.text.strip())
+
+    for table in document.tables:
+        for row in table.rows:
+            row_text = []
+            for cell in row.cells:
+                if cell.text.strip():
+                    row_text.append(cell.text.strip())
+            if row_text:
+                parts.append(" | ".join(row_text))
+
+    return "\n".join(parts).strip()
+
+
+def extract_txt_text_from_bytes(file_bytes: bytes) -> str:
+    try:
+        return file_bytes.decode("utf-8").strip()
+    except UnicodeDecodeError:
+        return file_bytes.decode("latin-1", errors="ignore").strip()
+
+
+def extract_text_from_bytes(file_bytes: bytes, filename: str = "", content_type: str = "") -> tuple[str, str]:
+    file_type = infer_file_type(filename, content_type)
+
+    if file_type == "pdf":
+        return extract_pdf_text_from_bytes(file_bytes), "pdf"
+
+    if file_type == "docx":
+        return extract_docx_text_from_bytes(file_bytes), "docx"
+
+    if file_type == "txt":
+        return extract_txt_text_from_bytes(file_bytes), "txt"
+
+    raise ValueError(f"Unsupported or unknown document type: {filename} | {content_type}")
+
+
+def extract_text_from_url(url: str) -> tuple[str, str]:
     response = requests.get(url, timeout=60)
     response.raise_for_status()
 
-    content_type = response.headers.get("content-type", "").lower()
+    content_type = response.headers.get("content-type", "")
+    filename = url.split("?")[0].split("/")[-1]
 
-    if "pdf" not in content_type and not url.lower().endswith(".pdf"):
-        raise ValueError("URL does not appear to be a PDF")
-
-    doc = fitz.open(stream=response.content, filetype="pdf")
-
-    text_parts = []
-    for page in doc:
-        text_parts.append(page.get_text())
-
-    return "\n".join(text_parts).strip()
-
-
-def extract_pdf_text_from_upload(file: UploadFile) -> str:
-    pdf_bytes = file.file.read()
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-
-    text_parts = []
-    for page in doc:
-        text_parts.append(page.get_text())
-
-    return "\n".join(text_parts).strip()
+    return extract_text_from_bytes(
+        file_bytes=response.content,
+        filename=filename,
+        content_type=content_type,
+    )
 
 
 def process_document_rows(db: Session, docs) -> dict:
@@ -64,7 +119,7 @@ def process_document_rows(db: Session, docs) -> dict:
 
     for doc in docs:
         try:
-            extracted_text = extract_pdf_text_from_url(doc.document_url)
+            extracted_text, detected_type = extract_text_from_url(doc.document_url)
 
             crud.upsert_opportunity_document(
                 db,
@@ -72,7 +127,7 @@ def process_document_rows(db: Session, docs) -> dict:
                     "notice_id": doc.notice_id,
                     "document_url": doc.document_url,
                     "document_name": doc.document_name,
-                    "document_type": doc.document_type,
+                    "document_type": detected_type,
                     "extracted_text": extracted_text,
                     "extraction_status": "complete",
                     "error_message": "",
@@ -131,7 +186,13 @@ def process_documents_for_reviewed_opportunities(db: Session, profile_id: int, l
 
 def upload_and_extract_document(db: Session, notice_id: str, file: UploadFile) -> dict:
     try:
-        extracted_text = extract_pdf_text_from_upload(file)
+        file_bytes = file.file.read()
+
+        extracted_text, detected_type = extract_text_from_bytes(
+            file_bytes=file_bytes,
+            filename=file.filename,
+            content_type=file.content_type or "",
+        )
 
         document_url = f"manual_upload://{notice_id}/{file.filename}"
 
@@ -141,7 +202,7 @@ def upload_and_extract_document(db: Session, notice_id: str, file: UploadFile) -
                 "notice_id": notice_id,
                 "document_url": document_url,
                 "document_name": file.filename,
-                "document_type": "manual_pdf_upload",
+                "document_type": f"manual_{detected_type}",
                 "extracted_text": extracted_text,
                 "extraction_status": "complete",
                 "error_message": "",
@@ -152,6 +213,7 @@ def upload_and_extract_document(db: Session, notice_id: str, file: UploadFile) -
             "status": "uploaded_and_extracted",
             "notice_id": notice_id,
             "document_name": file.filename,
+            "document_type": detected_type,
             "text_length": len(extracted_text),
             "document_id": doc.id,
         }
@@ -165,7 +227,7 @@ def upload_and_extract_document(db: Session, notice_id: str, file: UploadFile) -
                 "notice_id": notice_id,
                 "document_url": document_url,
                 "document_name": file.filename,
-                "document_type": "manual_pdf_upload",
+                "document_type": "manual_unknown",
                 "extracted_text": "",
                 "extraction_status": "failed",
                 "error_message": str(exc),

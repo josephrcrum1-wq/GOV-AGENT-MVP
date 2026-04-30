@@ -9,3 +9,4 @@ beautifulsoup4
 openai
 pymupdf
 psycopg2-binary
+python-docx
