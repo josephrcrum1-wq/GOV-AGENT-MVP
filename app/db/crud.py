@@ -332,3 +332,19 @@ def get_pending_documents(db: Session, limit: int = 25):
         .limit(limit)
         .all()
     )
+# --------------------------------------------------
+# Reviewed-opportunity document helpers
+# --------------------------------------------------
+def get_pending_documents_for_notice_ids(db: Session, notice_ids: list[str], limit: int = 25):
+    if not notice_ids:
+        return []
+
+    return (
+        db.query(models.OpportunityDocument)
+        .filter(
+            models.OpportunityDocument.notice_id.in_(notice_ids),
+            models.OpportunityDocument.extraction_status == "pending",
+        )
+        .limit(limit)
+        .all()
+    )

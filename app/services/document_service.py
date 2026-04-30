@@ -1,6 +1,8 @@
 import requests
 import fitz
 from sqlalchemy.orm import Session
+from fastapi import UploadFile
+
 from app.db import crud
 
 
@@ -36,20 +38,27 @@ def extract_pdf_text_from_url(url: str) -> str:
     if "pdf" not in content_type and not url.lower().endswith(".pdf"):
         raise ValueError("URL does not appear to be a PDF")
 
-    pdf_bytes = response.content
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    doc = fitz.open(stream=response.content, filetype="pdf")
 
     text_parts = []
-
     for page in doc:
         text_parts.append(page.get_text())
 
     return "\n".join(text_parts).strip()
 
 
-def process_pending_documents(db: Session, limit: int = 10) -> dict:
-    docs = crud.get_pending_documents(db, limit=limit)
+def extract_pdf_text_from_upload(file: UploadFile) -> str:
+    pdf_bytes = file.file.read()
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
 
+    text_parts = []
+    for page in doc:
+        text_parts.append(page.get_text())
+
+    return "\n".join(text_parts).strip()
+
+
+def process_document_rows(db: Session, docs) -> dict:
     processed = 0
     failed = 0
 
@@ -91,8 +100,84 @@ def process_pending_documents(db: Session, limit: int = 10) -> dict:
     return {
         "processed": processed,
         "failed": failed,
-        "remaining": max(len(docs) - processed - failed, 0),
+        "attempted": len(docs),
     }
+
+
+def process_pending_documents(db: Session, limit: int = 10) -> dict:
+    docs = crud.get_pending_documents(db, limit=limit)
+    return process_document_rows(db, docs)
+
+
+def process_documents_for_reviewed_opportunities(db: Session, profile_id: int, limit: int = 10) -> dict:
+    reviews = crud.get_reviews_for_profile(db, profile_id)
+
+    target_notice_ids = [
+        review.notice_id
+        for review in reviews
+        if review.disposition in ["Good Fit", "Maybe"]
+    ]
+
+    docs = crud.get_pending_documents_for_notice_ids(
+        db=db,
+        notice_ids=target_notice_ids,
+        limit=limit,
+    )
+
+    result = process_document_rows(db, docs)
+    result["reviewed_notice_ids"] = target_notice_ids
+    return result
+
+
+def upload_and_extract_document(db: Session, notice_id: str, file: UploadFile) -> dict:
+    try:
+        extracted_text = extract_pdf_text_from_upload(file)
+
+        document_url = f"manual_upload://{notice_id}/{file.filename}"
+
+        doc = crud.upsert_opportunity_document(
+            db,
+            {
+                "notice_id": notice_id,
+                "document_url": document_url,
+                "document_name": file.filename,
+                "document_type": "manual_pdf_upload",
+                "extracted_text": extracted_text,
+                "extraction_status": "complete",
+                "error_message": "",
+            },
+        )
+
+        return {
+            "status": "uploaded_and_extracted",
+            "notice_id": notice_id,
+            "document_name": file.filename,
+            "text_length": len(extracted_text),
+            "document_id": doc.id,
+        }
+
+    except Exception as exc:
+        document_url = f"manual_upload://{notice_id}/{file.filename}"
+
+        crud.upsert_opportunity_document(
+            db,
+            {
+                "notice_id": notice_id,
+                "document_url": document_url,
+                "document_name": file.filename,
+                "document_type": "manual_pdf_upload",
+                "extracted_text": "",
+                "extraction_status": "failed",
+                "error_message": str(exc),
+            },
+        )
+
+        return {
+            "status": "failed",
+            "notice_id": notice_id,
+            "document_name": file.filename,
+            "error": str(exc),
+        }
 
 
 def get_documents_for_notice(db: Session, notice_id: str) -> list[dict]:
@@ -113,9 +198,7 @@ def get_documents_for_notice(db: Session, notice_id: str) -> list[dict]:
     ]
 
 
-def get_combined_document_text(db, notice_id: str, max_chars: int = 12000) -> str:
-    from app.db import crud
-
+def get_combined_document_text(db: Session, notice_id: str, max_chars: int = 12000) -> str:
     docs = crud.get_documents_for_notice(db, notice_id)
 
     text = ""

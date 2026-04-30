@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal, engine, Base
@@ -22,6 +22,7 @@ from app.services.proposal_service import generate_proposal_plan
 from app.services import document_service
 from app.services.proposal_draft_service import generate_full_proposal
 from app.services.proposal_review_service import review_proposal_draft
+
 
 Base.metadata.create_all(bind=engine)
 
@@ -354,6 +355,27 @@ def process_documents(limit: int = 10, db: Session = Depends(get_db)):
 @app.get("/documents/{notice_id}")
 def get_documents_for_notice(notice_id: str, db: Session = Depends(get_db)):
     return document_service.get_documents_for_notice(db, notice_id)
+
+@app.post("/documents/process-reviewed/{profile_id}")
+def process_reviewed_documents(profile_id: int, limit: int = 10, db: Session = Depends(get_db)):
+    return document_service.process_documents_for_reviewed_opportunities(
+        db=db,
+        profile_id=profile_id,
+        limit=limit,
+    )
+
+
+@app.post("/documents/upload")
+def upload_document(
+    notice_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    return document_service.upload_and_extract_document(
+        db=db,
+        notice_id=notice_id,
+        file=file,
+    )
 
 @app.post("/proposal/full")
 def full_proposal(payload: dict, db: Session = Depends(get_db)):

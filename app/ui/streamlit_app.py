@@ -592,7 +592,7 @@ def render_opportunity_tools(opp, prefix="main"):
         st.write("**Flags:**")
         for flag in opp["flags"]:
             st.write(f"- {flag}")
-            
+
     # --------------------------------------------------
     # Document Intelligence Dashboard
     # --------------------------------------------------
@@ -602,7 +602,7 @@ def render_opportunity_tools(opp, prefix="main"):
 
     docs_key = f"{prefix}_documents_{notice_id}"
 
-    col_load_docs, col_process_docs = st.columns(2)
+    col_load_docs, col_process_docs, col_process_reviewed = st.columns(3)
 
     with col_load_docs:
         if st.button("Load Documents", key=f"{prefix}_load_docs_{notice_id}"):
@@ -617,6 +617,23 @@ def render_opportunity_tools(opp, prefix="main"):
 
             except Exception as exc:
                 st.error(f"Failed to load documents: {exc}")
+    with col_process_reviewed:
+        if st.button("Process Reviewed Docs", key=f"{prefix}_process_reviewed_docs_{notice_id}"):
+            try:
+                profile_id = st.session_state.get("profile_id")
+
+                res = requests.post(
+                    f"{API}/documents/process-reviewed/{profile_id}?limit=10",
+                    timeout=120,
+                )
+
+                if res.ok:
+                    st.success(f"Reviewed document processing result: {res.json()}")
+                else:
+                    st.error(res.text)
+
+            except Exception as exc:
+                st.error(f"Failed to process reviewed documents: {exc}")
 
     with col_process_docs:
         if st.button("Process Pending Documents", key=f"{prefix}_process_docs_{notice_id}"):
@@ -664,6 +681,45 @@ def render_opportunity_tools(opp, prefix="main"):
                     st.write(doc.get("text_preview"))
     else:
         st.warning("No documents loaded for this opportunity. AI analysis may rely only on SAM metadata and human enrichment.")
+
+    st.markdown("---")
+    st.subheader("Manual Document Upload")
+    st.caption("Upload RFP, SOW, PWS, amendment, or contracting office documents received outside SAM.gov.")
+
+    uploaded_file = st.file_uploader(
+        "Upload PDF document",
+        type=["pdf"],
+        key=f"{prefix}_manual_upload_{notice_id}",
+    )
+
+    if uploaded_file:
+        if st.button("Upload and Extract Document", key=f"{prefix}_submit_manual_upload_{notice_id}"):
+            try:
+                files = {
+                    "file": (
+                        uploaded_file.name,
+                        uploaded_file.getvalue(),
+                        "application/pdf",
+                    )
+                }
+
+                res = requests.post(
+                    f"{API}/documents/upload?notice_id={notice_id}",
+                    files=files,
+                    timeout=120,
+                )
+
+                if res.ok:
+                    st.success(f"Upload result: {res.json()}")
+
+                    docs_res = requests.get(f"{API}/documents/{notice_id}", timeout=30)
+                    if docs_res.ok:
+                        st.session_state[docs_key] = docs_res.json()
+                else:
+                    st.error(res.text)
+
+            except Exception as exc:
+                st.error(f"Manual upload failed: {exc}")
     # --------------------------------------------------
     # Human enrichment
     # --------------------------------------------------
