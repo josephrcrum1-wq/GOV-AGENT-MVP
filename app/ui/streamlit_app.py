@@ -1172,42 +1172,42 @@ def render_opportunity_tools(opp, prefix="main"):
                 for item in review.get("missing_information", []):
                     st.write(f"- {item}")
 
-            # --------------------------------------------------
-                # DOWNLOAD WORD DOCUMENT (FIXED)
                 # --------------------------------------------------
-                download_key = f"{prefix}_proposal_docx_{notice_id}"
+        # DOWNLOAD WORD DOCUMENT
+        # --------------------------------------------------
+        if isinstance(review, dict) and review and isinstance(revised, dict) and revised:
+            download_key = f"{prefix}_proposal_docx_{notice_id}"
 
-                if st.button("Prepare Word Document", key=f"{prefix}_prepare_docx_{notice_id}"):
-                    try:
-                        export_res = requests.post(
-                            f"{API}/proposal/export-docx",
-                            json={
-                                "revised_proposal": revised,
-                                "review": review,
-                            },
-                            timeout=120,
-                        )
-
-                        if export_res.ok:
-                            st.session_state[download_key] = export_res.content
-                            st.success("Document ready for download.")
-                        else:
-                            st.error("Failed to generate Word document.")
-
-                    except Exception as exc:
-                        st.error(f"Export failed: {exc}")
-
-                # Show download button ONLY if ready
-                docx_data = st.session_state.get(download_key)
-
-                if docx_data:
-                    st.download_button(
-                        label="Download Revised Proposal as Word Document",
-                        data=docx_data,
-                        file_name="revised_proposal_draft.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key=f"{prefix}_download_docx_{notice_id}",
+            if st.button("Prepare Word Document", key=f"{prefix}_prepare_docx_{notice_id}"):
+                try:
+                    export_res = requests.post(
+                        f"{API}/proposal/export-docx",
+                        json={
+                            "revised_proposal": revised,
+                            "review": review,
+                        },
+                        timeout=120,
                     )
+
+                    if export_res.ok:
+                        st.session_state[download_key] = export_res.content
+                        st.success("Document ready for download.")
+                    else:
+                        st.error("Failed to generate Word document.")
+
+                except Exception as exc:
+                    st.error(f"Export failed: {exc}")
+
+            docx_data = st.session_state.get(download_key)
+
+            if docx_data:
+                st.download_button(
+                    label="Download Revised Proposal as Word Document",
+                    data=docx_data,
+                    file_name="revised_proposal_draft.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key=f"{prefix}_download_docx_{notice_id}",
+                )
 # --------------------------------------------------
 # Ranked results section
 # --------------------------------------------------
