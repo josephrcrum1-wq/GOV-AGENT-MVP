@@ -1160,9 +1160,19 @@ def render_opportunity_tools(opp, prefix="main"):
                 st.write(revised.get("past_performance", ""))
 
                 st.write("#### Staffing Plan")
-                st.write(revised.get("staffing_plan", ""))
+                st.write(revised.get("staffing_plan", ""))                
 
-                # --------------------------------------------------
+            if review.get("assumptions"):
+                st.write("### Assumptions")
+                for item in review.get("assumptions", []):
+                    st.write(f"- {item}")
+
+            if review.get("missing_information"):
+                st.write("### Missing Information")
+                for item in review.get("missing_information", []):
+                    st.write(f"- {item}")
+
+            # --------------------------------------------------
                 # DOWNLOAD WORD DOCUMENT (FIXED)
                 # --------------------------------------------------
                 download_key = f"{prefix}_proposal_docx_{notice_id}"
@@ -1198,16 +1208,6 @@ def render_opportunity_tools(opp, prefix="main"):
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         key=f"{prefix}_download_docx_{notice_id}",
                     )
-
-            if review.get("assumptions"):
-                st.write("### Assumptions")
-                for item in review.get("assumptions", []):
-                    st.write(f"- {item}")
-
-            if review.get("missing_information"):
-                st.write("### Missing Information")
-                for item in review.get("missing_information", []):
-                    st.write(f"- {item}")
 # --------------------------------------------------
 # Ranked results section
 # --------------------------------------------------
