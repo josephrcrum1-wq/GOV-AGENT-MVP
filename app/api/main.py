@@ -356,12 +356,21 @@ def get_documents_for_notice(notice_id: str, db: Session = Depends(get_db)):
 
 @app.post("/proposal/full")
 def full_proposal(payload: dict, db: Session = Depends(get_db)):
-    profile = crud.get_profile(db, payload["profile_id"])
+    profile = profile_service.get_profile_by_id(db, payload["profile_id"])
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    enrichment = enrichment_service.get_enrichment(
+        db,
+        profile_id=payload["profile_id"],
+        notice_id=payload["opportunity"].get("notice_id", ""),
+    ) or {}
 
     return generate_full_proposal(
         db=db,
         profile=profile,
         opportunity=payload["opportunity"],
-        proposal_plan=payload["proposal_plan"],
-        enrichment=payload.get("enrichment", {}),
+        proposal_plan=payload.get("proposal_plan", {}),
+        enrichment=enrichment,
     )
