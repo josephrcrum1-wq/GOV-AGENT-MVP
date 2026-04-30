@@ -857,6 +857,7 @@ def render_opportunity_tools(opp, prefix="main"):
                 for req in requirements:
                     with st.expander(f"{req.get('id', '')} | {req.get('category', '').title()} | {req.get('priority', '').title()}"):
                         st.write(f"**Requirement:** {req.get('requirement', '')}")
+                        st.write(f"**Source Document:** {req.get('source_document', 'Unknown')}")
                         st.write(f"**Ambiguity:** {req.get('ambiguity', '')}")
                         st.write(f"**Source Excerpt:** {req.get('source_excerpt', '')}")
             else:
@@ -1214,6 +1215,8 @@ def render_opportunity_tools(opp, prefix="main"):
                 for row in matrix:
                     with st.expander(f"{row.get('requirement_id', '')} | {row.get('category', '').title()} | {row.get('status', '')}"):
                         st.write(f"**Requirement:** {row.get('requirement', '')}")
+                        st.write(f"**Source Document:** {row.get('source_document', 'Unknown')}")
+                        st.write(f"**Source Excerpt:** {row.get('source_excerpt', '')}")
                         st.write(f"**Proposal Section:** {row.get('proposal_section', '')}")
                         st.write(f"**Evidence From Proposal:** {row.get('evidence_from_proposal', '')}")
                         st.write(f"**Gap:** {row.get('gap', '')}")

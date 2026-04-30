@@ -51,12 +51,13 @@ Return ONLY valid JSON:
   "notice_id": "{notice_id}",
   "requirements": [
     {{
-      "id": "REQ-001",
-      "category": "technical | management | staffing | past_performance | compliance | reporting | schedule | submission | other",
-      "requirement": "Clear requirement statement.",
-      "source_excerpt": "Short excerpt from source text.",
-      "priority": "high | medium | low",
-      "ambiguity": "clear | ambiguous"
+    "id": "REQ-001",
+    "category": "technical | management | staffing | past_performance | compliance | reporting | schedule | submission | other",
+    "requirement": "Clear requirement statement.",
+    "source_document": "Name of the document if identifiable, otherwise Unknown",
+    "source_excerpt": "Short excerpt from source text.",
+    "priority": "high | medium | low",
+    "ambiguity": "clear | ambiguous"
     }}
   ],
   "missing_information": [
@@ -133,6 +134,8 @@ Rules:
 - Identify exact gaps.
 - Recommend specific fixes.
 - If the proposal contains unsupported claims, flag them.
+- Include source_document using the document heading/name if available from the document text. If not identifiable, use "Unknown".
+- Preserve source_document and source_excerpt from each extracted requirement in the matrix.
 
 Opportunity:
 Title: {opportunity.get("title")}
@@ -154,14 +157,16 @@ Return ONLY valid JSON:
   "summary": "Short compliance readiness summary.",
   "matrix": [
     {{
-      "requirement_id": "REQ-001",
-      "category": "technical",
-      "requirement": "Requirement text",
-      "status": "Addressed | Partial | Missing | Not Applicable | Insufficient Information",
-      "proposal_section": "executive_summary | technical_approach | management_plan | past_performance | staffing_plan | none",
-      "evidence_from_proposal": "Short excerpt or paraphrase from proposal.",
-      "gap": "What is missing or weak.",
-      "recommended_fix": "Specific fix."
+    "requirement_id": "REQ-001",
+    "category": "technical",
+    "requirement": "Requirement text",
+    "source_document": "Source document from extracted requirement",
+    "source_excerpt": "Source excerpt from extracted requirement",
+    "status": "Addressed | Partial | Missing | Not Applicable | Insufficient Information",
+    "proposal_section": "executive_summary | technical_approach | management_plan | past_performance | staffing_plan | none",
+    "evidence_from_proposal": "Short excerpt or paraphrase from proposal.",
+    "gap": "What is missing or weak.",
+    "recommended_fix": "Specific fix."
     }}
   ],
   "major_gaps": ["gap 1", "gap 2"],
