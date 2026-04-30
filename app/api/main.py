@@ -20,6 +20,7 @@ from app.services.usaspending_service import (
 from app.services.decision_agent_service import run_decision_agent
 from app.services.proposal_service import generate_proposal_plan
 from app.services import document_service
+from app.services.proposal_draft_service import generate_full_proposal
 
 Base.metadata.create_all(bind=engine)
 
@@ -352,3 +353,15 @@ def process_documents(limit: int = 10, db: Session = Depends(get_db)):
 @app.get("/documents/{notice_id}")
 def get_documents_for_notice(notice_id: str, db: Session = Depends(get_db)):
     return document_service.get_documents_for_notice(db, notice_id)
+
+@app.post("/proposal/full")
+def full_proposal(payload: dict, db: Session = Depends(get_db)):
+    profile = crud.get_profile(db, payload["profile_id"])
+
+    return generate_full_proposal(
+        db=db,
+        profile=profile,
+        opportunity=payload["opportunity"],
+        proposal_plan=payload["proposal_plan"],
+        enrichment=payload.get("enrichment", {}),
+    )

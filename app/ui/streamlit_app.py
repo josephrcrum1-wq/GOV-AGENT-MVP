@@ -901,6 +901,63 @@ def render_opportunity_tools(opp, prefix="main"):
         st.write("### Assumptions")
         for item in proposal_plan.get("assumptions", []):
             st.write(f"- {item}")
+
+    # --------------------------------------------------
+    # Full Proposal Draft
+    # --------------------------------------------------
+    st.markdown("---")
+    st.subheader("Full Proposal Draft")
+
+    proposal_draft_key = f"{prefix}_proposal_draft_{notice_id}"
+
+    if st.button("Generate Full Proposal", key=f"{prefix}_proposal_draft_btn_{notice_id}"):
+        try:
+            res = requests.post(
+                f"{API}/proposal/full",
+                json={
+                    "profile_id": st.session_state.get("profile_id"),
+                    "opportunity": opp,
+                    "proposal_plan": proposal_plan,
+                },
+                timeout=120,
+            )
+
+            if res.ok:
+                st.session_state[proposal_draft_key] = res.json()
+                st.success("Full proposal draft generated.")
+            else:
+                st.error(res.text)
+
+        except Exception as exc:
+            st.error(f"Failed to generate proposal: {exc}")
+
+    draft = st.session_state.get(proposal_draft_key) or {}
+
+    if isinstance(draft, dict) and draft:
+        st.write("## Executive Summary")
+        st.write(draft.get("executive_summary", ""))
+
+        st.write("## Technical Approach")
+        st.write(draft.get("technical_approach", ""))
+
+        st.write("## Management Plan")
+        st.write(draft.get("management_plan", ""))
+
+        st.write("## Past Performance")
+        st.write(draft.get("past_performance", ""))
+
+        st.write("## Staffing Plan")
+        st.write(draft.get("staffing_plan", ""))
+
+        if draft.get("assumptions"):
+            st.write("## Assumptions")
+            for item in draft.get("assumptions", []):
+                st.write(f"- {item}")
+
+        if draft.get("missing_information"):
+            st.write("## Missing Information")
+            for item in draft.get("missing_information", []):
+                st.write(f"- {item}")
 # --------------------------------------------------
 # Ranked results section
 # --------------------------------------------------
