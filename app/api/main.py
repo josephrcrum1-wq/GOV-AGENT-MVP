@@ -22,6 +22,8 @@ from app.services.proposal_service import generate_proposal_plan
 from app.services import document_service
 from app.services.proposal_draft_service import generate_full_proposal
 from app.services.proposal_review_service import review_proposal_draft
+from fastapi.responses import StreamingResponse
+from app.services.docx_export_service import build_revised_proposal_docx
 
 
 Base.metadata.create_all(bind=engine)
@@ -418,4 +420,22 @@ def review_proposal(payload: dict, db: Session = Depends(get_db)):
         proposal_plan=payload.get("proposal_plan", {}),
         proposal_draft=payload.get("proposal_draft", {}),
         enrichment=enrichment,
+    )
+
+@app.post("/proposal/export-docx")
+def export_proposal_docx(payload: dict):
+    revised_proposal = payload.get("revised_proposal", {})
+    review = payload.get("review", {})
+
+    file_stream = build_revised_proposal_docx(
+        revised_proposal=revised_proposal,
+        review=review,
+    )
+
+    return StreamingResponse(
+        file_stream,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": "attachment; filename=revised_proposal_draft.docx"
+        },
     )

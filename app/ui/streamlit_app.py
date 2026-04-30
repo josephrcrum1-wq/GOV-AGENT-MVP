@@ -671,7 +671,9 @@ def render_opportunity_tools(opp, prefix="main"):
             st.write(f"**Name:** {doc.get('document_name', '')}")
             st.write(f"**Status:** {doc.get('extraction_status', '')}")
             st.write(f"**Text Length:** {doc.get('text_length', 0)}")
-            st.write(f"**URL:** {doc.get('document_url', '')}")
+            url = doc.get("document_url", "")
+            if url:
+                st.markdown(f"[Open Source Link]({url})")
 
             if doc.get("error_message"):
                 st.error(doc.get("error_message"))
@@ -699,7 +701,7 @@ def render_opportunity_tools(opp, prefix="main"):
                     "file": (
                         uploaded_file.name,
                         uploaded_file.getvalue(),
-                        "application/pdf",
+                        uploaded_file.type or "application/octet-stream",
                     )
                 }
 
@@ -1085,7 +1087,7 @@ def render_opportunity_tools(opp, prefix="main"):
             st.write("## Missing Information")
             for item in draft.get("missing_information", []):
                 st.write(f"- {item}")
-            # --------------------------------------------------
+        # --------------------------------------------------
         # Senior Capture Advisor Review
         # --------------------------------------------------
         st.markdown("---")
@@ -1159,6 +1161,43 @@ def render_opportunity_tools(opp, prefix="main"):
 
                 st.write("#### Staffing Plan")
                 st.write(revised.get("staffing_plan", ""))
+
+                # --------------------------------------------------
+                # DOWNLOAD WORD DOCUMENT (FIXED)
+                # --------------------------------------------------
+                download_key = f"{prefix}_proposal_docx_{notice_id}"
+
+                if st.button("Prepare Word Document", key=f"{prefix}_prepare_docx_{notice_id}"):
+                    try:
+                        export_res = requests.post(
+                            f"{API}/proposal/export-docx",
+                            json={
+                                "revised_proposal": revised,
+                                "review": review,
+                            },
+                            timeout=120,
+                        )
+
+                        if export_res.ok:
+                            st.session_state[download_key] = export_res.content
+                            st.success("Document ready for download.")
+                        else:
+                            st.error("Failed to generate Word document.")
+
+                    except Exception as exc:
+                        st.error(f"Export failed: {exc}")
+
+                # Show download button ONLY if ready
+                docx_data = st.session_state.get(download_key)
+
+                if docx_data:
+                    st.download_button(
+                        label="Download Revised Proposal as Word Document",
+                        data=docx_data,
+                        file_name="revised_proposal_draft.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key=f"{prefix}_download_docx_{notice_id}",
+                    )
 
             if review.get("assumptions"):
                 st.write("### Assumptions")
