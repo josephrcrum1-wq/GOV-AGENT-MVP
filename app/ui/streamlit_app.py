@@ -592,7 +592,78 @@ def render_opportunity_tools(opp, prefix="main"):
         st.write("**Flags:**")
         for flag in opp["flags"]:
             st.write(f"- {flag}")
+            
+    # --------------------------------------------------
+    # Document Intelligence Dashboard
+    # --------------------------------------------------
+    st.markdown("---")
+    st.subheader("Document Intelligence")
+    st.caption("Shows whether solicitation documents were captured, extracted, and available for AI analysis.")
 
+    docs_key = f"{prefix}_documents_{notice_id}"
+
+    col_load_docs, col_process_docs = st.columns(2)
+
+    with col_load_docs:
+        if st.button("Load Documents", key=f"{prefix}_load_docs_{notice_id}"):
+            try:
+                res = requests.get(f"{API}/documents/{notice_id}", timeout=30)
+
+                if res.ok:
+                    st.session_state[docs_key] = res.json()
+                    st.success("Documents loaded.")
+                else:
+                    st.error(res.text)
+
+            except Exception as exc:
+                st.error(f"Failed to load documents: {exc}")
+
+    with col_process_docs:
+        if st.button("Process Pending Documents", key=f"{prefix}_process_docs_{notice_id}"):
+            try:
+                res = requests.post(f"{API}/documents/process?limit=10", timeout=120)
+
+                if res.ok:
+                    st.success(f"Processing result: {res.json()}")
+                else:
+                    st.error(res.text)
+
+            except Exception as exc:
+                st.error(f"Failed to process documents: {exc}")
+
+    documents = st.session_state.get(docs_key, [])
+
+    if documents:
+        complete_docs = [d for d in documents if d.get("extraction_status") == "complete"]
+        failed_docs = [d for d in documents if d.get("extraction_status") == "failed"]
+        total_text = sum(d.get("text_length", 0) for d in documents)
+
+        dcol1, dcol2, dcol3 = st.columns(3)
+
+        with dcol1:
+            st.metric("Documents Found", len(documents))
+
+        with dcol2:
+            st.metric("Extracted", len(complete_docs))
+
+        with dcol3:
+            st.metric("Total Text Chars", total_text)
+
+        for doc in documents:
+            st.markdown("---")
+            st.write(f"**Name:** {doc.get('document_name', '')}")
+            st.write(f"**Status:** {doc.get('extraction_status', '')}")
+            st.write(f"**Text Length:** {doc.get('text_length', 0)}")
+            st.write(f"**URL:** {doc.get('document_url', '')}")
+
+            if doc.get("error_message"):
+                st.error(doc.get("error_message"))
+
+            if doc.get("text_preview"):
+                with st.expander("Preview Extracted Text"):
+                    st.write(doc.get("text_preview"))
+    else:
+        st.warning("No documents loaded for this opportunity. AI analysis may rely only on SAM metadata and human enrichment.")
     # --------------------------------------------------
     # Human enrichment
     # --------------------------------------------------
@@ -958,6 +1029,90 @@ def render_opportunity_tools(opp, prefix="main"):
             st.write("## Missing Information")
             for item in draft.get("missing_information", []):
                 st.write(f"- {item}")
+            # --------------------------------------------------
+        # Senior Capture Advisor Review
+        # --------------------------------------------------
+        st.markdown("---")
+        st.subheader("Senior Capture Advisor Review")
+        st.caption("Reviews the proposal for compliance, clarity, screening risk, and competitiveness.")
+
+        review_key = f"{prefix}_proposal_review_{notice_id}"
+
+        if st.button("Run Senior Capture Review", key=f"{prefix}_proposal_review_btn_{notice_id}"):
+            try:
+                res = requests.post(
+                    f"{API}/proposal/review",
+                    json={
+                        "profile_id": st.session_state.get("profile_id"),
+                        "opportunity": opp,
+                        "proposal_plan": proposal_plan,
+                        "proposal_draft": draft,
+                    },
+                    timeout=120,
+                )
+
+                if res.ok:
+                    st.session_state[review_key] = res.json()
+                    st.success("Senior capture review complete.")
+                else:
+                    st.error(res.text)
+
+            except Exception as exc:
+                st.error(f"Failed to run senior capture review: {exc}")
+
+        review = st.session_state.get(review_key) or {}
+
+        if isinstance(review, dict) and review:
+            st.write("### Overall Assessment")
+            st.write(review.get("overall_assessment", ""))
+
+            st.write("### Screening Risks")
+            for item in review.get("screening_risks", []):
+                st.write(f"- {item}")
+
+            st.write("### Compliance Gaps")
+            for item in review.get("compliance_gaps", []):
+                st.write(f"- {item}")
+
+            st.write("### Section Feedback")
+            section_feedback = review.get("section_feedback", {})
+            if isinstance(section_feedback, dict):
+                for section, feedback in section_feedback.items():
+                    st.write(f"**{section.replace('_', ' ').title()}:** {feedback}")
+
+            st.write("### Recommended Revisions")
+            for item in review.get("recommended_revisions", []):
+                st.write(f"- {item}")
+
+            revised = review.get("revised_proposal", {})
+
+            if isinstance(revised, dict) and revised:
+                st.write("### Revised Proposal Draft")
+
+                st.write("#### Executive Summary")
+                st.write(revised.get("executive_summary", ""))
+
+                st.write("#### Technical Approach")
+                st.write(revised.get("technical_approach", ""))
+
+                st.write("#### Management Plan")
+                st.write(revised.get("management_plan", ""))
+
+                st.write("#### Past Performance")
+                st.write(revised.get("past_performance", ""))
+
+                st.write("#### Staffing Plan")
+                st.write(revised.get("staffing_plan", ""))
+
+            if review.get("assumptions"):
+                st.write("### Assumptions")
+                for item in review.get("assumptions", []):
+                    st.write(f"- {item}")
+
+            if review.get("missing_information"):
+                st.write("### Missing Information")
+                for item in review.get("missing_information", []):
+                    st.write(f"- {item}")
 # --------------------------------------------------
 # Ranked results section
 # --------------------------------------------------

@@ -21,6 +21,7 @@ from app.services.decision_agent_service import run_decision_agent
 from app.services.proposal_service import generate_proposal_plan
 from app.services import document_service
 from app.services.proposal_draft_service import generate_full_proposal
+from app.services.proposal_review_service import review_proposal_draft
 
 Base.metadata.create_all(bind=engine)
 
@@ -372,5 +373,27 @@ def full_proposal(payload: dict, db: Session = Depends(get_db)):
         profile=profile,
         opportunity=payload["opportunity"],
         proposal_plan=payload.get("proposal_plan", {}),
+        enrichment=enrichment,
+    )
+
+@app.post("/proposal/review")
+def review_proposal(payload: dict, db: Session = Depends(get_db)):
+    profile = profile_service.get_profile_by_id(db, payload["profile_id"])
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    enrichment = enrichment_service.get_enrichment(
+        db,
+        profile_id=payload["profile_id"],
+        notice_id=payload["opportunity"].get("notice_id", ""),
+    ) or {}
+
+    return review_proposal_draft(
+        db=db,
+        profile=profile,
+        opportunity=payload["opportunity"],
+        proposal_plan=payload.get("proposal_plan", {}),
+        proposal_draft=payload.get("proposal_draft", {}),
         enrichment=enrichment,
     )
