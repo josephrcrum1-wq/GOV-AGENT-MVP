@@ -723,6 +723,133 @@ def render_opportunity_tools(opp, prefix="main"):
             except Exception as exc:
                 st.error(f"Manual upload failed: {exc}")
     # --------------------------------------------------
+    # Requirement Extraction and Compliance Matrix
+    # --------------------------------------------------
+    st.markdown("---")
+    st.subheader("Requirement Extraction & Compliance Matrix")
+    st.caption("Extracts requirements from uploaded/captured documents and checks proposal compliance.")
+
+    requirements_key = f"{prefix}_requirements_{notice_id}"
+    compliance_key = f"{prefix}_compliance_matrix_{notice_id}"
+
+    col_extract_req, col_matrix = st.columns(2)
+
+    with col_extract_req:
+        if st.button("Extract Requirements", key=f"{prefix}_extract_requirements_{notice_id}"):
+            try:
+                res = requests.post(
+                    f"{API}/requirements/extract",
+                    json={"opportunity": opp},
+                    timeout=120,
+                )
+
+                if res.ok:
+                    st.session_state[requirements_key] = res.json()
+                    st.success("Requirements extracted.")
+                else:
+                    st.error(res.text)
+
+            except Exception as exc:
+                st.error(f"Failed to extract requirements: {exc}")
+
+    requirements_result = st.session_state.get(requirements_key) or {}
+
+    if isinstance(requirements_result, dict) and requirements_result:
+        requirements = requirements_result.get("requirements", [])
+
+        st.write(f"### Extracted Requirements ({len(requirements)})")
+
+        if requirements:
+            for req in requirements:
+                with st.expander(f"{req.get('id', '')} | {req.get('category', '').title()} | {req.get('priority', '').title()}"):
+                    st.write(f"**Requirement:** {req.get('requirement', '')}")
+                    st.write(f"**Ambiguity:** {req.get('ambiguity', '')}")
+                    st.write(f"**Source Excerpt:** {req.get('source_excerpt', '')}")
+        else:
+            st.warning("No requirements extracted.")
+
+        if requirements_result.get("missing_information"):
+            st.write("### Requirement Extraction Gaps")
+            for item in requirements_result.get("missing_information", []):
+                st.write(f"- {item}")
+
+    with col_matrix:
+        if st.button("Build Compliance Matrix", key=f"{prefix}_build_matrix_{notice_id}"):
+            try:
+                proposal_draft_key = f"{prefix}_proposal_draft_{notice_id}"
+                review_key = f"{prefix}_proposal_review_{notice_id}"
+
+                proposal_draft = st.session_state.get(proposal_draft_key) or {}
+                review = st.session_state.get(review_key) or {}
+                revised_proposal = {}
+
+                if isinstance(review, dict):
+                    revised_proposal = review.get("revised_proposal", {}) or {}
+
+                if not requirements_result:
+                    st.error("Extract requirements first.")
+                elif not proposal_draft and not revised_proposal:
+                    st.error("Generate a proposal draft or senior advisor revision first.")
+                else:
+                    res = requests.post(
+                        f"{API}/requirements/compliance-matrix",
+                        json={
+                            "opportunity": opp,
+                            "requirements_result": requirements_result,
+                            "proposal_draft": proposal_draft,
+                            "revised_proposal": revised_proposal,
+                        },
+                        timeout=120,
+                    )
+
+                    if res.ok:
+                        st.session_state[compliance_key] = res.json()
+                        st.success("Compliance matrix generated.")
+                    else:
+                        st.error(res.text)
+
+            except Exception as exc:
+                st.error(f"Failed to build compliance matrix: {exc}")
+
+    compliance = st.session_state.get(compliance_key) or {}
+
+    if isinstance(compliance, dict) and compliance:
+        st.write("### Compliance Readiness")
+        st.write(f"**Overall Status:** {compliance.get('overall_status', '')}")
+        st.write(compliance.get("summary", ""))
+
+        matrix = compliance.get("matrix", [])
+
+        if matrix:
+            st.write("### Compliance Matrix")
+
+            for row in matrix:
+                status = row.get("status", "")
+                req_id = row.get("requirement_id", "")
+                category = row.get("category", "")
+
+                with st.expander(f"{req_id} | {category.title()} | {status}"):
+                    st.write(f"**Requirement:** {row.get('requirement', '')}")
+                    st.write(f"**Proposal Section:** {row.get('proposal_section', '')}")
+                    st.write(f"**Evidence From Proposal:** {row.get('evidence_from_proposal', '')}")
+                    st.write(f"**Gap:** {row.get('gap', '')}")
+                    st.write(f"**Recommended Fix:** {row.get('recommended_fix', '')}")
+
+        if compliance.get("major_gaps"):
+            st.write("### Major Gaps")
+            for item in compliance.get("major_gaps", []):
+                st.write(f"- {item}")
+
+        if compliance.get("unsupported_claims"):
+            st.write("### Unsupported Claims")
+            for item in compliance.get("unsupported_claims", []):
+                st.write(f"- {item}")
+
+        if compliance.get("recommended_next_steps"):
+            st.write("### Recommended Next Steps")
+            for item in compliance.get("recommended_next_steps", []):
+                st.write(f"- {item}")          
+    # --------------------------------------------------
     # Human enrichment
     # --------------------------------------------------
     render_enrichment_form(notice_id)
@@ -1172,42 +1299,47 @@ def render_opportunity_tools(opp, prefix="main"):
                 for item in review.get("missing_information", []):
                     st.write(f"- {item}")
 
-                # --------------------------------------------------
-        # DOWNLOAD WORD DOCUMENT
-        # --------------------------------------------------
-        if isinstance(review, dict) and review and isinstance(revised, dict) and revised:
-            download_key = f"{prefix}_proposal_docx_{notice_id}"
+            # --------------------------------------------------
+            # DOWNLOAD WORD DOCUMENT
+            # --------------------------------------------------
+            revised_for_export = {}
 
-            if st.button("Prepare Word Document", key=f"{prefix}_prepare_docx_{notice_id}"):
-                try:
-                    export_res = requests.post(
-                        f"{API}/proposal/export-docx",
-                        json={
-                            "revised_proposal": revised,
-                            "review": review,
-                        },
-                        timeout=120,
+            if isinstance(review, dict) and review:
+                revised_for_export = review.get("revised_proposal", {}) or {}
+
+            if isinstance(revised_for_export, dict) and revised_for_export:
+                download_key = f"{prefix}_proposal_docx_{notice_id}"
+
+                if st.button("Prepare Word Document", key=f"{prefix}_prepare_docx_{notice_id}"):
+                    try:
+                        export_res = requests.post(
+                            f"{API}/proposal/export-docx",
+                            json={
+                                "revised_proposal": revised_for_export,
+                                "review": review,
+                            },
+                            timeout=120,
+                        )
+
+                        if export_res.ok:
+                            st.session_state[download_key] = export_res.content
+                            st.success("Document ready for download.")
+                        else:
+                            st.error("Failed to generate Word document.")
+
+                    except Exception as exc:
+                        st.error(f"Export failed: {exc}")
+
+                docx_data = st.session_state.get(download_key)
+
+                if docx_data:
+                    st.download_button(
+                        label="Download Revised Proposal as Word Document",
+                        data=docx_data,
+                        file_name="revised_proposal_draft.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key=f"{prefix}_download_docx_{notice_id}",
                     )
-
-                    if export_res.ok:
-                        st.session_state[download_key] = export_res.content
-                        st.success("Document ready for download.")
-                    else:
-                        st.error("Failed to generate Word document.")
-
-                except Exception as exc:
-                    st.error(f"Export failed: {exc}")
-
-            docx_data = st.session_state.get(download_key)
-
-            if docx_data:
-                st.download_button(
-                    label="Download Revised Proposal as Word Document",
-                    data=docx_data,
-                    file_name="revised_proposal_draft.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    key=f"{prefix}_download_docx_{notice_id}",
-                )
 # --------------------------------------------------
 # Ranked results section
 # --------------------------------------------------

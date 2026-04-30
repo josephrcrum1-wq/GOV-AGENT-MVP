@@ -24,6 +24,10 @@ from app.services.proposal_draft_service import generate_full_proposal
 from app.services.proposal_review_service import review_proposal_draft
 from fastapi.responses import StreamingResponse
 from app.services.docx_export_service import build_revised_proposal_docx
+from app.services.requirement_service import (
+    extract_requirements_from_documents,
+    build_compliance_matrix,
+)
 
 
 Base.metadata.create_all(bind=engine)
@@ -438,4 +442,22 @@ def export_proposal_docx(payload: dict):
         headers={
             "Content-Disposition": "attachment; filename=revised_proposal_draft.docx"
         },
+    )
+
+@app.post("/requirements/extract")
+def extract_requirements(payload: dict, db: Session = Depends(get_db)):
+    return extract_requirements_from_documents(
+        db=db,
+        opportunity=payload.get("opportunity", {}),
+    )
+
+
+@app.post("/requirements/compliance-matrix")
+def compliance_matrix(payload: dict, db: Session = Depends(get_db)):
+    return build_compliance_matrix(
+        db=db,
+        opportunity=payload.get("opportunity", {}),
+        requirements_result=payload.get("requirements_result", {}),
+        proposal_draft=payload.get("proposal_draft", {}),
+        revised_proposal=payload.get("revised_proposal", {}),
     )
